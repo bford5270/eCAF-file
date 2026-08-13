@@ -73,7 +73,7 @@ From `CLAUDE.md`, and worth knowing before reading any of the code:
 - **Standards drive the instrument.** Adding a standard requires zero app
   changes.
 
-`tools/lint_hard_rules.py` checks ten of these automatically. Three more can only
+`tools/lint_hard_rules.py` checks twelve invariants automatically. Three more can only
 be verified in the tenant, and are gated in `docs/dry-run.md`.
 
 ## Known open item
