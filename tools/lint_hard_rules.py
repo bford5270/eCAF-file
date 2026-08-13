@@ -320,6 +320,61 @@ def rule_indexes_declared():
             fail("indexes", f"{lst}.{col} is filtered on but not marked indexed")
 
 
+def rule_single_canonical_vocabulary():
+    check("Exactly one definition of the canonical result vocabulary")
+    # The hard rule is about stored data, but it applies to the code producing
+    # it: two ingestion tools with two private variant tables is how the
+    # predecessor came to write "Not Met" down one path and "NOT_MET" down
+    # another. Every tool imports tools/ecaf_normalize.py.
+    owner = os.path.join(ROOT, "tools", "ecaf_normalize.py")
+    if not os.path.exists(owner):
+        fail("one-vocabulary", "tools/ecaf_normalize.py is missing")
+        return
+
+    definers = []
+    for path in walk((".py",), "tools"):
+        with open(path, encoding="utf-8") as fh:
+            src = fh.read()
+        if re.search(r"^RESULT_CANON\s*=\s*\{", src, re.M):
+            definers.append(os.path.relpath(path, ROOT))
+
+    if definers != ["tools/ecaf_normalize.py"]:
+        fail(
+            "one-vocabulary",
+            f"RESULT_CANON is defined in {definers} — it must be defined only in "
+            f"tools/ecaf_normalize.py and imported everywhere else",
+        )
+
+    # And the ingestion tools must actually use it.
+    for tool in ("migrate_ewp.py", "parse_review_forms.py"):
+        p = os.path.join(ROOT, "tools", tool)
+        if not os.path.exists(p):
+            continue
+        with open(p, encoding="utf-8") as fh:
+            src = fh.read()
+        if "from ecaf_normalize import" not in src:
+            fail("one-vocabulary", f"tools/{tool} does not import ecaf_normalize")
+
+
+def rule_parser_refuses_item12():
+    check("The form parser refuses DHA 455 item 12 ratings and patient identifiers")
+    p = os.path.join(ROOT, "tools", "parse_review_forms.py")
+    if not os.path.exists(p):
+        return
+    with open(p, encoding="utf-8") as fh:
+        src = fh.read()
+    # The gate must reject the whole file, not parse it minus the field: a form
+    # bearing an item 12 rating means the local process is rating item 12, which
+    # needs a human. Same for a form carrying patient identifiers.
+    for needle, why in (
+        ("is_item12_value", "no item 12 detection"),
+        ("scan_pii", "no patient-identifier detection"),
+        ("def gate_file", "no whole-file rejection gate"),
+    ):
+        if needle not in src:
+            fail("parser-gates", f"parse_review_forms.py: {why}")
+
+
 def rule_html_generation_is_encoded():
     check("Free text interpolated into generated HTML is HTML-encoded")
     p = os.path.join(ROOT, "dist", "app", "src", "App.fx.yaml")
@@ -348,15 +403,25 @@ def rule_html_generation_is_encoded():
                 )
 
 
-def rule_migration_csv_is_neutralised():
-    check("Migration output neutralises spreadsheet formula injection")
-    p = os.path.join(ROOT, "tools", "migrate_ewp.py")
-    with open(p, encoding="utf-8") as fh:
-        src = fh.read()
-    if "def csv_safe(" not in src:
-        fail("csv-injection", "migrate_ewp.py has no csv_safe neutraliser")
-    elif "row[col] = csv_safe(" not in src:
-        fail("csv-injection", "migrate_ewp.py writes rows without passing through csv_safe")
+def rule_csv_output_is_neutralised():
+    check("Ingested and migrated CSV output neutralises formula injection")
+    # The invariant is that values reach the CSV through csv_safe — not where
+    # csv_safe happens to live. It is defined once in ecaf_normalize.py and
+    # imported; asserting on the definition site would fail the moment it is
+    # (correctly) shared, which is exactly what happened when it was.
+    if "def csv_safe(" not in open(
+        os.path.join(ROOT, "tools", "ecaf_normalize.py"), encoding="utf-8"
+    ).read():
+        fail("csv-injection", "ecaf_normalize.py has no csv_safe neutraliser")
+
+    for tool in ("migrate_ewp.py", "parse_review_forms.py"):
+        p = os.path.join(ROOT, "tools", tool)
+        if not os.path.exists(p):
+            continue
+        with open(p, encoding="utf-8") as fh:
+            src = fh.read()
+        if "csv_safe" not in src:
+            fail("csv-injection", f"tools/{tool} writes CSV without csv_safe")
 
 
 def main():
@@ -373,7 +438,9 @@ def main():
         rule_csv_matches_schema,
         rule_indexes_declared,
         rule_html_generation_is_encoded,
-        rule_migration_csv_is_neutralised,
+        rule_csv_output_is_neutralised,
+        rule_single_canonical_vocabulary,
+        rule_parser_refuses_item12,
     ):
         fn()
 

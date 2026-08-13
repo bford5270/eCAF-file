@@ -29,40 +29,11 @@ import os
 import re
 import sys
 
-# --- the normalization that matters ----------------------------------------
-# CLAUDE.md: element results are stored as exactly MET | NOT_MET | NA. The
-# predecessor tool wrote several spellings, and cases carrying the variants
-# silently dropped out of 455 denominators. Every known variant maps here, and
-# anything unrecognised is reported rather than guessed.
-RESULT_CANON = {
-    "met": "MET",
-    "yes": "MET",
-    "y": "MET",
-    "pass": "MET",
-    "compliant": "MET",
-    "notmet": "NOT_MET",
-    "not met": "NOT_MET",
-    "not_met": "NOT_MET",
-    "no": "NOT_MET",
-    "n": "NOT_MET",
-    "fail": "NOT_MET",
-    "noncompliant": "NOT_MET",
-    "non-compliant": "NOT_MET",
-    "na": "NA",
-    "n/a": "NA",
-    "notapplicable": "NA",
-    "not applicable": "NA",
-    "": "NA",
-}
-
-DETERMINATION_CANON = {
-    "satisfactory": "Satisfactory",
-    "sat": "Satisfactory",
-    "s": "Satisfactory",
-    "unsatisfactory": "Unsatisfactory",
-    "unsat": "Unsatisfactory",
-    "u": "Unsatisfactory",
-}
+# --- canonical vocabulary -------------------------------------------------
+# Imported, never re-declared. Two ingestion tools with two private copies of
+# the variant table is how the predecessor came to write "Not Met" down one path
+# and "NOT_MET" down another. See tools/ecaf_normalize.py.
+from ecaf_normalize import canonical_result, csv_safe  # noqa: E402
 
 # --- mapping: source key -> eCAF column. VERIFY AGAINST --inspect OUTPUT. ---
 FIELD_MAP = {
@@ -140,8 +111,8 @@ def cmd_inspect(path):
     print("\n=== Distinct values of anything result-shaped")
     vals = collect_values(data, r"result|answer|met|status|determination")
     for v, n in vals.most_common(40):
-        canon = RESULT_CANON.get(v.strip().lower(), DETERMINATION_CANON.get(v.strip().lower()))
-        mark = f"-> {canon}" if canon else "-> UNMAPPED, add to RESULT_CANON"
+        canon, ok = canonical_result(v)
+        mark = f"-> {canon}" if ok else "-> UNMAPPED, add to ecaf_normalize.RESULT_CANON"
         print(f"  {v!r:<30} ×{n:<5} {mark}")
 
     print("\n=== Keys that must NOT be migrated")
@@ -157,21 +128,6 @@ def cmd_inspect(path):
     print("\nNext: correct FIELD_MAP in this file to match the paths above, then")
     print("run with --migrate.")
     return 0
-
-
-def csv_safe(value):
-    """Neutralise spreadsheet formula injection.
-
-    docs/dry-run.md tells the operator to open these files and reconcile them
-    against the HTML tool, and the reconciliation workflow makes opening them in
-    Excel the expected next step. Values here come from the predecessor export —
-    review comments and provider names that any reviewer could once type — so a
-    cell beginning =, +, -, @, tab or CR is a formula or DDE payload waiting for
-    that double-click. Prefixing a single quote makes Excel treat it as text; the
-    value is unchanged for SharePoint import, which does not evaluate formulas.
-    """
-    s = "" if value is None else str(value)
-    return "'" + s if s[:1] in ("=", "+", "-", "@", "\t", "\r") else s
 
 
 def resolve(record, candidates):
@@ -224,9 +180,9 @@ def cmd_migrate(path, outdir):
             for col in cols:
                 val = resolve(rec, mapping[col])
                 if col == "Result" and val is not None:
-                    key = str(val).strip().lower()
-                    if key in RESULT_CANON:
-                        val = RESULT_CANON[key]
+                    canon, ok = canonical_result(val)
+                    if ok:
+                        val = canon
                     else:
                         report["unmapped_results"][str(val)] += 1
                         # Never guess. An unmapped result becomes blank and is

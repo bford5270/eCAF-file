@@ -10,6 +10,11 @@ python3 tools/build_holidays.py     # schemas/holidays.csv from 5 USC 6103
 python3 tools/build_lists.py        # dist/lists/ CSVs + provisioning runbook
 python3 tools/build_templates.py    # dist/templates/ .docx staging templates
 python3 tools/lint_hard_rules.py    # the CLAUDE.md hard-rule review — must pass
+python3 tools/test_parse_review_forms.py   # form-parser refusal behaviour
+
+# Ingest (not part of the build; run against real forms as they arrive)
+python3 tools/parse_review_forms.py --inspect forms/
+python3 tools/migrate_ewp.py       --inspect ewp-peer-review-data.json
 ```
 
 Everything in `dist/` is generated. **Edit the source and re-run; do not
@@ -69,9 +74,17 @@ Read in this order before touching the tenant:
     importing then recreates the exact denominator bug this system exists to
     end.** Reconcile counts against the HTML tool before cutover. Keep the HTML
     tool as the documented outage contingency.
-11. Delete every sample row (`PROVIDER, SAMPLE *`, FIN `TEST*`,
+11. **Ongoing — ingesting completed paper/Word forms.** Reviewers who work
+    outside the app hand in forms; `tools/parse_review_forms.py` turns those into
+    import CSVs. `--inspect` first, always. It rejects any form carrying patient
+    identifiers or a marked DHA 455 item 12 rating, and refuses to guess an
+    unrecognised result. Hand reviewers the generated `dist/templates/*.docx` —
+    a filled-in template parses at high confidence from its content controls;
+    anything else is positional scraping and lands in a NEEDS-REVIEW file.
+    See `docs/form-ingest.md`.
+12. Delete every sample row (`PROVIDER, SAMPLE *`, FIN `TEST*`,
     `*@test.invalid`) before go-live.
-12. Document adoption + the ReviewType denominator default in credentials
+13. Document adoption + the ReviewType denominator default in credentials
     committee minutes, and put the minute reference into
     `eCAF_Config!DenominatorReviewTypes.AuthorityRef`; calendar the quarterly
     access review (F8).

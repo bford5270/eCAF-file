@@ -19,6 +19,7 @@ to. A human operator imports everything through the browser or `pac`.
 | Import the app | `dist/app/README.md` |
 | Build the flows | `dist/flows/README.md` |
 | Accept the build | `docs/dry-run.md` |
+| Ingest completed paper/Word review forms | `docs/form-ingest.md` |
 | Check the compliance posture | `docs/hard-rule-review.md` |
 
 ## Layout
@@ -35,8 +36,8 @@ dist/app/src/              canvas app Power Fx YAML (9 screens + component)
 dist/flows/                F1–F8 recreate-in-the-designer instructions
 dist/templates/            4 .docx staging templates with content controls
 
-tools/                     generators, the hard-rule linter, the migration script
-docs/                      mapping engine, dry run, hard-rule review
+tools/                     generators, hard-rule linter, form parser, migration
+docs/                      mapping engine, dry run, form ingest, hard-rule review
 ```
 
 ## Regenerating
@@ -49,7 +50,8 @@ pip install python-docx
 python3 tools/build_holidays.py
 python3 tools/build_lists.py
 python3 tools/build_templates.py
-python3 tools/lint_hard_rules.py     # must pass before anything ships
+python3 tools/lint_hard_rules.py          # must pass before anything ships
+python3 tools/test_parse_review_forms.py  # form-parser refusal behaviour
 ```
 
 ## The rules that shape every design decision here
@@ -73,7 +75,7 @@ From `CLAUDE.md`, and worth knowing before reading any of the code:
 - **Standards drive the instrument.** Adding a standard requires zero app
   changes.
 
-`tools/lint_hard_rules.py` checks twelve invariants automatically. Three more can only
+`tools/lint_hard_rules.py` checks fourteen invariants automatically. Three more can only
 be verified in the tenant, and are gated in `docs/dry-run.md`.
 
 ## Known open item

@@ -3,8 +3,10 @@
 CLAUDE.md requires a self-review against the "Hard rules" section at the end of
 every build phase. This is that review for the completed build.
 
-`tools/lint_hard_rules.py` automates twelve checks — the ten below plus the two
-added by the security review at the foot of this file — and passes. The table
+`tools/lint_hard_rules.py` automates fourteen checks — the ten below, the two
+added by the security review at the foot of this file, and two covering the form
+parser (one canonical vocabulary; the parser refuses item 12 ratings and patient
+identifiers) — and passes. The table
 below records where each rule is satisfied, and — more usefully — **how it would
 have to be broken**, so a reviewer knows what to look for in a future change.
 
