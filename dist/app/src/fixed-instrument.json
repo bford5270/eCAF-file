@@ -73,7 +73,8 @@
   },
 
   "_blobShape": {
-    "Item11Elements": "{\"standardofcare\":\"MET\",\"medication\":\"NOT_MET\",\"blood\":\"NA\",\"consults\":\"MET\"}",
-    "CompetencyDomains": "{\"PC-A\":\"Satisfactory\",\"PC-B\":\"Satisfactory\", \"...\":\"one key per construct key above\"}"
+    "_why_array_not_map": "Stored as a JSON ARRAY of {key,result} records, not an object map. Power Fx ParseJSON returns an Untyped object whose fields can only be reached by literal name (obj.medication), so an object map cannot be read with a variable element key — which is exactly what the aggregation does when it loops over the element set. An array is walkable with ForAll/Filter and keeps the element set data-driven. Do not 'simplify' this to a map.",
+    "Item11Elements": "[{\"key\":\"standardofcare\",\"result\":\"MET\"},{\"key\":\"medication\",\"result\":\"NOT_MET\"},{\"key\":\"blood\",\"result\":\"NA\"},{\"key\":\"consults\",\"result\":\"MET\"}]",
+    "CompetencyDomains": "[{\"key\":\"PC-A\",\"result\":\"Satisfactory\"}, ... one record per construct key above]"
   }
 }

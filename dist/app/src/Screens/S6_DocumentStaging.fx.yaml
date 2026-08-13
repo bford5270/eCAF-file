@@ -1,0 +1,460 @@
+# S6_DocumentStaging — build an FPPE / OPPE / DHA 455 product for a provider+period.
+#
+# Two things live here that the rest of the app depends on:
+#
+#   1. RefreshAggregates (btnRefresh.OnSelect) builds colItem11Flat and
+#      colResponseFlat — the flattened JSON the App-level Item11* and
+#      StandardMetRate formulas read. Flattening needs ClearCollect, which is a
+#      behavior function and cannot live in a named formula, so it lives here and
+#      every screen that reads an aggregate calls it first.
+#
+#   2. The in-app HTML -> .doc generator. CLAUDE.md: build this REGARDLESS of
+#      whether the Word Online (Business) connector is licensed. F6 is the
+#      upgrade, not the dependency. In a DoD enclave with no premium connectors
+#      this is the only path that produces a document at all.
+#
+# Two hard rules are visible on this screen:
+#   - DHA 455 item 12 renders blank, always, with the supervisor note beside it.
+#   - DRAFT-VALIDATE standards are excluded from generated output.
+
+Screens:
+    S6_DocumentStaging:
+        Properties:
+            Fill: =RGBA(245, 246, 248, 1)
+
+            OnVisible: |
+                =Set(varStagedHtml, "");
+                Set(varGenError, "");
+                Select(btnRefresh)
+
+        Children:
+
+            - lblTitle:
+                Control: Label
+                Properties:
+                    Text: ="Document Staging"
+                    Size: =24
+                    FontWeight: =FontWeight.Bold
+                    X: =40
+                    Y: =24
+
+            - cboProvider:
+                Control: ComboBox
+                Properties:
+                    X: =40
+                    Y: =80
+                    Width: =400
+                    Items: =Sort(eCAF_Providers, Title)
+                    SelectMultiple: =false
+
+            - dpPeriodStart:
+                Control: DatePicker
+                Properties:
+                    X: =470
+                    Y: =80
+                    DefaultDate: =cboProvider.Selected.OPPEPeriodStart
+
+            - dpPeriodEnd:
+                Control: DatePicker
+                Properties:
+                    X: =660
+                    Y: =80
+                    DefaultDate: =cboProvider.Selected.OPPEPeriodEnd
+
+            - ddDocType:
+                Control: Dropdown
+                Properties:
+                    X: =850
+                    Y: =80
+                    Items: =["OPPE Product", "FPPE Product", "DHA455 PAR"]
+
+            # ===============================================================
+            # RefreshAggregates
+            # ===============================================================
+            - btnRefresh:
+                Control: Button
+                Properties:
+                    X: =40
+                    Y: =130
+                    Text: ="Refresh aggregates"
+                    OnSelect: |
+                        =// Server-side first: indexed columns only, bounded to
+                        // this provider and period. Everything after this works
+                        // on a set small enough to hold in memory.
+                        ClearCollect(
+                            colPeriodCases,
+                            Filter(
+                                eCAF_ReviewCases,
+                                Provider.Id = cboProvider.Selected.ID,
+                                CaseStatus = "Complete",
+                                EncounterDate >= dpPeriodStart.SelectedDate,
+                                EncounterDate <= dpPeriodEnd.SelectedDate
+                            )
+                        );
+
+                        // Denominator rule applied in memory, because ReviewType
+                        // is not indexed and a delegation warning here would mean
+                        // a silently truncated denominator. Reads eCAF_Config via
+                        // CountsInDenominator — "Peer" is not written here.
+                        ClearCollect(
+                            colQualCases,
+                            Filter(colPeriodCases, CountsInDenominator(ReviewType.Value, CaseStatus.Value))
+                        );
+
+                        // --- flatten Item11Elements JSON -> one row per (case, element)
+                        ClearCollect(
+                            colItem11Flat,
+                            Ungroup(
+                                ForAll(
+                                    Filter(
+                                        eCAF_ReviewSummaries,
+                                        ReviewCase.Id in colQualCases.ID
+                                    ) As s,
+                                    {
+                                        Rows: ForAll(
+                                            Table(ParseJSON(Coalesce(s.Item11Elements, "[]"))) As e,
+                                            {
+                                                ProviderId: cboProvider.Selected.ID,
+                                                CaseId: s.ReviewCase.Id,
+                                                EncounterDate: LookUp(
+                                                    colQualCases,
+                                                    ID = s.ReviewCase.Id,
+                                                    EncounterDate
+                                                ),
+                                                ElementKey: Text(e.Value.key),
+                                                Result: Text(e.Value.result)
+                                            }
+                                        )
+                                    }
+                                ),
+                                "Rows"
+                            )
+                        );
+
+                        // --- per-standard responses for the cross-specialty panel.
+                        // NOT restricted to the denominator types: the panel is a
+                        // quality view across all reviews, and excluding
+                        // cross-specialty responses would throw away exactly the
+                        // data the panel exists to show. Only FORM denominators
+                        // are narrowed.
+                        ClearCollect(
+                            colResponseFlat,
+                            ForAll(
+                                Filter(
+                                    eCAF_ReviewResponses,
+                                    ReviewCase.Id in colPeriodCases.ID
+                                ) As r,
+                                {
+                                    StandardId: r.Standard.Id,
+                                    CaseId: r.ReviewCase.Id,
+                                    Result: r.Result.Value,
+                                    CaseSpecialty: LookUp(
+                                        colPeriodCases,
+                                        ID = r.ReviewCase.Id,
+                                        RequiredReviewerSpecialty.Value
+                                    )
+                                }
+                            )
+                        );
+
+                        Set(varAggregatesAsOf, Now())
+
+            - lblAsOf:
+                Control: Label
+                Properties:
+                    Text: |
+                        =If(
+                            IsBlank(varAggregatesAsOf),
+                            "",
+                            "Aggregates as of " & Text(varAggregatesAsOf, "dd mmm yyyy hh:mm")
+                                & "  ·  " & CountRows(colQualCases) & " qualifying of "
+                                & CountRows(colPeriodCases) & " completed reviews in period"
+                        )
+                    Size: =10
+                    X: =240
+                    Y: =140
+
+            # ===============================================================
+            # Floor gate
+            # ===============================================================
+            - lblFloorGate:
+                Control: Label
+                Properties:
+                    # Below the floor, the preview still renders but every
+                    # computed ratio is marked [VERIFY] rather than printed as a
+                    # clean percentage. A 2-of-2 100% that looks like a finished
+                    # OPPE is worse than an obvious gap.
+                    Text: |
+                        =With(
+                            {n: CountRows(Filter(colQualCases, ReviewPurpose.Value = "OPPE"))},
+                            If(
+                                n >= nfOPPEFloor,
+                                "Review floor met: " & n & " of " & nfOPPEFloor,
+                                "BELOW FLOOR — " & n & " of " & nfOPPEFloor & " qualifying peer reviews. "
+                                    & "Computed ratios below are marked [VERIFY] and must not be
+                                       presented as a completed OPPE."
+                            )
+                        )
+                    Color: |
+                        =If(
+                            CountRows(Filter(colQualCases, ReviewPurpose.Value = "OPPE")) >= nfOPPEFloor,
+                            RGBA(0, 120, 60, 1),
+                            RGBA(168, 0, 0, 1)
+                        )
+                    X: =40
+                    Y: =176
+                    Width: =900
+
+            # ===============================================================
+            # Populated vs [VERIFY] preview
+            # ===============================================================
+            - galItem11Preview:
+                Control: Gallery
+                Variant: Vertical
+                Properties:
+                    X: =40
+                    Y: =220
+                    Width: =620
+                    Height: =200
+                    Items: =colItem11Elements
+                Children:
+                    - lblPreviewElement:
+                        Control: Label
+                        Properties:
+                            Text: =ThisItem.ElementLabel
+                            Width: =360
+                    - lblPreviewValue:
+                        Control: Label
+                        Properties:
+                            Text: |
+                                =With(
+                                    {
+                                        v: Item11Display(
+                                            cboProvider.Selected.ID,
+                                            dpPeriodStart.SelectedDate,
+                                            dpPeriodEnd.SelectedDate,
+                                            ThisItem.ElementKey
+                                        ),
+                                        belowFloor: CountRows(
+                                            Filter(colQualCases, ReviewPurpose.Value = "OPPE")
+                                        ) < nfOPPEFloor
+                                    },
+                                    If(v = "no data" Or belowFloor, "[VERIFY] " & v, v)
+                                )
+                            Color: |
+                                =If(
+                                    Left(Self.Text, 8) = "[VERIFY]",
+                                    RGBA(168, 0, 0, 1),
+                                    RGBA(30, 35, 45, 1)
+                                )
+
+            # --- DHA 455 item 12: blank, always -------------------------
+            - lblItem12Label:
+                Control: Label
+                Properties:
+                    Visible: =ddDocType.Selected.Value = "DHA455 PAR"
+                    Text: ="Item 12 — Overall rating (Poor / Fair / Good / Superior)"
+                    FontWeight: =FontWeight.Semibold
+                    X: =700
+                    Y: =220
+                    Width: =540
+
+            - recItem12Blank:
+                Control: Rectangle
+                Properties:
+                    Visible: =ddDocType.Selected.Value = "DHA455 PAR"
+                    Fill: =RGBA(255, 255, 255, 1)
+                    BorderColor: =RGBA(180, 185, 195, 1)
+                    BorderThickness: =1
+                    X: =700
+                    Y: =250
+                    Width: =540
+                    Height: =40
+
+            - lblItem12Note:
+                Control: Label
+                Properties:
+                    # There is no control here that can be filled in and no code
+                    # path that writes item 12. The aggregates above are the
+                    # evidence; the rating is the supervisor's.
+                    Visible: =ddDocType.Selected.Value = "DHA455 PAR"
+                    Text: |
+                        ="Clinical supervisor determination required. This system displays
+                        aggregate evidence and does not rate item 12 — no source document
+                        crosswalks the Satisfactory/Unsatisfactory review scale to the
+                        Poor/Fair/Good/Superior scale."
+                    Size: =10
+                    Color: =RGBA(120, 15, 15, 1)
+                    X: =700
+                    Y: =296
+                    Width: =540
+
+            # --- standards included / excluded ---------------------------
+            - galStandardsIncluded:
+                Control: Gallery
+                Variant: Vertical
+                Properties:
+                    X: =40
+                    Y: =440
+                    Width: =620
+                    Height: =240
+                    # ACTIVE only. DRAFT-VALIDATE standards are excluded from
+                    # generated documents — hard rule — even though the reviewer
+                    # answered them and they count on the dashboard.
+                    Items: |
+                        =AddColumns(
+                            Filter(eCAF_Standards, Status = "ACTIVE"),
+                            "MetRate", StandardMetRate(ID, "All")
+                        )
+                Children:
+                    - lblIncStd:
+                        Control: Label
+                        Properties:
+                            Text: |
+                                =ThisItem.Title & " — "
+                                    & If(
+                                        IsBlank(ThisItem.MetRate),
+                                        "[VERIFY] no data",
+                                        Round(ThisItem.MetRate * 100, 0) & "% met"
+                                    )
+
+            - lblExcludedCount:
+                Control: Label
+                Properties:
+                    Text: |
+                        =With(
+                            {
+                                d: CountRows(
+                                    Filter(
+                                        eCAF_Standards,
+                                        Status = "DRAFT-VALIDATE",
+                                        Specialty.Value in ["Universal", cboProvider.Selected.Specialty.Value]
+                                    )
+                                )
+                            },
+                            If(
+                                d = 0,
+                                "",
+                                d & " DRAFT-VALIDATE standard(s) answered during review are EXCLUDED
+                                 from this document pending Clinical Leader validation."
+                            )
+                        )
+                    Size: =10
+                    Color: =RGBA(140, 90, 0, 1)
+                    X: =40
+                    Y: =690
+                    Width: =620
+
+            # ===============================================================
+            # Generate
+            # ===============================================================
+            - btnGenerateWord:
+                Control: Button
+                Properties:
+                    X: =700
+                    Y: =600
+                    Text: ="Generate (Word template — F6)"
+                    # Hidden when the connector is not present, rather than shown
+                    # and failing. varWordConnectorAvailable is set once in
+                    # App.OnStart by a guarded probe; see dist/app/README.md.
+                    Visible: =varWordConnectorAvailable
+                    OnSelect: |
+                        =Set(varGenError, "");
+                        IfError(
+                            'eCAF-F6-GenerateDocument'.Run(
+                                cboProvider.Selected.ID,
+                                Text(dpPeriodStart.SelectedDate, "yyyy-mm-dd"),
+                                Text(dpPeriodEnd.SelectedDate, "yyyy-mm-dd"),
+                                ddDocType.Selected.Value
+                            ),
+                            Set(
+                                varGenError,
+                                "Word generation unavailable — " & FirstError.Message
+                                    & "  Use the HTML fallback below; it produces the same content."
+                            )
+                        )
+
+            - btnGenerateHtml:
+                Control: Button
+                Properties:
+                    X: =700
+                    Y: =650
+                    Text: ="Generate (.doc — no license required)"
+                    # The always-available path. Produces Word-openable HTML with
+                    # a .doc extension: the technique the predecessor tool used,
+                    # proven in this tenant, no premium connector.
+                    OnSelect: |
+                        =Set(
+                            varStagedHtml,
+                            BuildDocumentHtml(
+                                cboProvider.Selected.ID,
+                                dpPeriodStart.SelectedDate,
+                                dpPeriodEnd.SelectedDate,
+                                ddDocType.Selected.Value
+                            )
+                        );
+
+                        // File into the provider's folder in eCAF_Documents.
+                        // Folder-per-provider per lists.json.
+                        IfError(
+                            Patch(
+                                eCAF_Documents,
+                                Defaults(eCAF_Documents),
+                                {
+                                    Name: ddDocType.Selected.Value & "_"
+                                        & Substitute(cboProvider.Selected.Title, ", ", "-")
+                                        & "_" & Text(dpPeriodStart.SelectedDate, "yyyymmdd")
+                                        & "-" & Text(dpPeriodEnd.SelectedDate, "yyyymmdd")
+                                        & ".doc",
+                                    // .doc, not .docx: this is HTML that Word
+                                    // opens natively. Naming it .docx produces a
+                                    // file Word refuses to open.
+                                    Contents: varStagedHtml
+                                }
+                            ),
+                            Set(varGenError, "Could not file the document. " & FirstError.Message)
+                        );
+
+                        If(
+                            IsBlank(varGenError),
+                            // Open routing stage 1. F7 advances it from here; if
+                            // flows are unavailable the MSP advances it manually
+                            // from S7.
+                            Patch(
+                                eCAF_Routing,
+                                Defaults(eCAF_Routing),
+                                {
+                                    Title: "RT-" & Text(Now(), "yyyymmddhhmmss"),
+                                    Stage: {Value: If(ddDocType.Selected.Value = "FPPE Product", "Preceptor", "Provider")},
+                                    Action: {Value: "Pending"}
+                                }
+                            );
+                            Notify("Document staged and routing opened.", NotificationType.Success)
+                        )
+
+            - lblGenError:
+                Control: Label
+                Properties:
+                    Visible: =!IsBlank(varGenError)
+                    Text: =varGenError
+                    Color: =RGBA(168, 0, 0, 1)
+                    X: =700
+                    Y: =700
+                    Width: =540
+
+            - htmlPreview:
+                Control: HtmlViewer
+                Properties:
+                    X: =40
+                    Y: =730
+                    Width: =1200
+                    Height: =300
+                    HtmlText: =varStagedHtml
+
+            - cmpFooter:
+                Control: CanvasComponent
+                ComponentName: cmpCUIFooter
+                Properties:
+                    X: =0
+                    Y: =Parent.Height - 40
+                    Width: =Parent.Width

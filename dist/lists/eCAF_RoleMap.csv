@@ -1,0 +1,4 @@
+﻿Title,RoleName,Department,Specialty,Active
+sample.msp@test.invalid,MSP,,,Yes
+sample.supervisor@test.invalid,ClinicalLeader,SAMPLE Medical Battalion,EmergencyMedicine,Yes
+sample.reviewer1@test.invalid,Reviewer,SAMPLE Medical Battalion,,Yes

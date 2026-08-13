@@ -151,6 +151,19 @@
       ]
     },
     {
+      "internalName": "eCAF_RoleMap",
+      "displayName": "Role Map",
+      "addedByBuild": "app-spec.md names eCAF_RoleMap as the documented fallback when the Office 365 Groups connector is blocked, but lists.json did not define it. In a DoD enclave the connector being unavailable is the likely case, not the exception.",
+      "note": "Fallback role resolution ONLY. App-side role gating is UX; the SharePoint group permissions in the provisioning runbook are the actual boundary. A row here grants a user a nicer menu, never access to data.",
+      "columns": [
+        {"name": "Title", "maps": "UserEmail", "type": "text", "required": true, "indexed": true},
+        {"name": "RoleName", "type": "choice", "choices": ["MSP", "ClinicalLeader", "Reviewer", "Preceptor", "Provider"], "required": true},
+        {"name": "Department", "type": "text", "note": "Scopes Clinical Leader dashboard cards to their department"},
+        {"name": "Specialty", "type": "choice", "choicesFrom": "eCAF_Standards.Specialty", "note": "Which specialty's standards this Clinical Leader may validate in S8. Blank for non-CL roles"},
+        {"name": "Active", "type": "yesno"}
+      ]
+    },
+    {
       "internalName": "eCAF_Config",
       "displayName": "Configuration",
       "addedByBuild": "CLAUDE.md requires the ReviewType denominator rule to be 'data, not hard-code' so the credentials committee can reverse it without an app change. This list is that data.",

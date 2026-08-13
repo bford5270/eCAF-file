@@ -65,9 +65,9 @@ def _blobs(item11_overrides=None, construct_default="Satisfactory"):
     """Build the two JSON blobs eCAF_ReviewSummaries stores, from the fixed
     instrument definition — so sample data and the app read the same element keys."""
     fi = _fixed_instrument()
-    item11 = {e["key"]: "MET" for e in fi["item11Elements"]}
-    item11.update(item11_overrides or {})
-    domains = {c["key"]: construct_default for c in fi["competencyConstructs"]}
+    ov = item11_overrides or {}
+    item11 = [{"key": e["key"], "result": ov.get(e["key"], "MET")} for e in fi["item11Elements"]]
+    domains = [{"key": c["key"], "result": construct_default} for c in fi["competencyConstructs"]]
     return (json.dumps(item11, separators=(",", ":")),
             json.dumps(domains, separators=(",", ":")))
 
@@ -214,6 +214,12 @@ SAMPLES = {
         {"Title": "POOL-0003", "Reviewer": REV3,
          "QualifiedSpecialties": "Universal;EmergencyMedicine;PhysicalTherapy",
          "Department": "SAMPLE Regiment Aid Station", "Available": "No", "OpenAssignments": 1},
+    ],
+    "eCAF_RoleMap": [
+        {"Title": MSP, "RoleName": "MSP", "Department": "", "Active": "Yes"},
+        {"Title": SUP, "RoleName": "ClinicalLeader", "Department": "SAMPLE Medical Battalion",
+         "Specialty": "EmergencyMedicine", "Active": "Yes"},
+        {"Title": REV1, "RoleName": "Reviewer", "Department": "SAMPLE Medical Battalion", "Active": "Yes"},
     ],
     "eCAF_Config": [
         {"Title": "DenominatorReviewTypes", "ConfigValue": "Peer",

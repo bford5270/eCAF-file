@@ -1,0 +1,59 @@
+# S0_NoAccess — where a user with no resolved role lands.
+#
+# Deliberately not a dashboard with empty cards. A user who is not in any eCAF
+# group cannot read the lists either, so a dashboard would render as a wall of
+# permission errors that looks like the app is broken rather than like the user
+# is not enrolled.
+
+Screens:
+    S0_NoAccess:
+        Properties:
+            Fill: =RGBA(245, 246, 248, 1)
+        Children:
+            - lblNoAccessTitle:
+                Control: Label
+                Properties:
+                    Text: ="You are not enrolled in e-CAF"
+                    Size: =22
+                    FontWeight: =FontWeight.Bold
+                    X: =40
+                    Y: =120
+
+            - lblNoAccessBody:
+                Control: Label
+                Properties:
+                    Text: |
+                        ="Your account (" & gblMe.Email & ") is not a member of any e-CAF role
+                        group, so no clinical data is available to you.
+
+                        Contact the MSP office to be added to the appropriate group. Access is
+                        granted by group membership, reviewed quarterly."
+                    X: =40
+                    Y: =170
+                    Width: =700
+
+            - lblRoleResolutionNote:
+                Control: Label
+                Properties:
+                    # Surfaces which resolution path ran, so the MSP debugging an
+                    # access complaint can tell "not in the group" from "the
+                    # Groups connector is blocked and the fallback list has no row".
+                    Text: |
+                        ="Role resolution: " &
+                        If(
+                            IsError(UserInGroup("eCAF-MSP")),
+                            "group lookup unavailable, fell back to eCAF_RoleMap",
+                            "SharePoint group membership"
+                        )
+                    Size: =9
+                    Color: =RGBA(120, 125, 135, 1)
+                    X: =40
+                    Y: =300
+
+            - cmpFooter:
+                Control: CanvasComponent
+                ComponentName: cmpCUIFooter
+                Properties:
+                    X: =0
+                    Y: =Parent.Height - 40
+                    Width: =Parent.Width

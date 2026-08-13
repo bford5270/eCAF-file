@@ -201,6 +201,22 @@ Import `eCAF_Holidays.csv`, then:
 | `StatutoryDate` | Date and time (Date Only format) |  | Reference only. Differs from HolidayDate when the holiday falls on a weekend |
 | `Observed` | Choice (drop-down) | values: `Y`, `N` | Y = shifted for weekend observance |
 
+### eCAF_RoleMap — Role Map
+
+> Added by this build: app-spec.md names eCAF_RoleMap as the documented fallback when the Office 365 Groups connector is blocked, but lists.json did not define it. In a DoD enclave the connector being unavailable is the likely case, not the exception.
+
+> Fallback role resolution ONLY. App-side role gating is UX; the SharePoint group permissions in the provisioning runbook are the actual boundary. A row here grants a user a nicer menu, never access to data.
+
+Import `eCAF_RoleMap.csv`, then:
+
+| Column | SharePoint type | Settings | Why |
+|---|---|---|---|
+| `Title` | Single line of text | **required** · **indexed** |  |
+| `RoleName` | Choice (drop-down) | **required** · values: `MSP`, `ClinicalLeader`, `Reviewer`, `Preceptor`, `Provider` |  |
+| `Department` | Single line of text |  | Scopes Clinical Leader dashboard cards to their department |
+| `Specialty` | Choice (drop-down) | values mirror `eCAF_Standards.Specialty` | Which specialty's standards this Clinical Leader may validate in S8. Blank for non-CL roles |
+| `Active` | Yes/No |  |  |
+
 ### eCAF_Config — Configuration
 
 > Added by this build: CLAUDE.md requires the ReviewType denominator rule to be 'data, not hard-code' so the credentials committee can reverse it without an app change. This list is that data.
@@ -297,6 +313,7 @@ creation itself can fail and the fix gets ugly.
 - `eCAF_Routing`: `Document`, `CurrentHolder`
 - `eCAF_ReviewerPool`: `Reviewer`
 - `eCAF_Holidays`: `HolidayDate`
+- `eCAF_RoleMap`: `Title`
 - `eCAF_Config`: `Title`
 
 ## Versioning

@@ -1,0 +1,524 @@
+# S4_ReviewInstrument — the reviewer's screen. Two sections, in order:
+#   1. Fixed instrument   — renders on every case, from fixed-instrument.json
+#   2. Standards checklist — renders from eCAF_Standards, filtered to the case
+#
+# Section 2 is the whole point of the standards engine: adding a standard to the
+# list makes it appear here on the next review with no app change. Nothing on
+# this screen names a specific standard.
+#
+# Autosave: every toggle Patches immediately. There is no Save button for the
+# element/standard answers. A reviewer working through 26 standards on a
+# government laptop over VPN will lose the session at some point, and losing 40
+# minutes of review is how a tool stops being used.
+
+Screens:
+    S4_ReviewInstrument:
+        Properties:
+            Fill: =RGBA(245, 246, 248, 1)
+
+            OnVisible: |
+                =// ctxCase arrives from the dashboard queue via Navigate context.
+                Set(varCase, ctxCase);
+                Set(varSubmitError, "");
+
+                // Existing responses for this case, so a resumed review shows
+                // what was already answered rather than a blank form.
+                ClearCollect(
+                    colMyResponses,
+                    Filter(eCAF_ReviewResponses, ReviewCase.Id = varCase.ID)
+                );
+
+                Set(
+                    varSummary,
+                    LookUp(eCAF_ReviewSummaries, ReviewCase.Id = varCase.ID)
+                );
+
+                // Unpack the two JSON blobs into editable collections. Blank on
+                // a first visit, which is why Coalesce defaults to the full
+                // element/construct set with no result chosen.
+                ClearCollect(
+                    colItem11Answers,
+                    ForAll(
+                        colItem11Elements As el,
+                        {
+                            ElementKey: el.ElementKey,
+                            ElementLabel: el.ElementLabel,
+                            Result: Coalesce(
+                                LookUp(
+                                    ForAll(
+                                        Table(ParseJSON(Coalesce(varSummary.Item11Elements, "[]"))),
+                                        {k: Text(ThisRecord.Value.key), r: Text(ThisRecord.Value.result)}
+                                    ),
+                                    k = el.ElementKey,
+                                    r
+                                ),
+                                ""
+                            )
+                        }
+                    )
+                );
+
+                ClearCollect(
+                    colConstructAnswers,
+                    ForAll(
+                        colConstructs As ct,
+                        {
+                            ConstructKey: ct.ConstructKey,
+                            Domain: ct.Domain,
+                            ConstructLabel: ct.ConstructLabel,
+                            Result: Coalesce(
+                                LookUp(
+                                    ForAll(
+                                        Table(ParseJSON(Coalesce(varSummary.CompetencyDomains, "[]"))),
+                                        {k: Text(ThisRecord.Value.key), r: Text(ThisRecord.Value.result)}
+                                    ),
+                                    k = ct.ConstructKey,
+                                    r
+                                ),
+                                ""
+                            )
+                        }
+                    )
+                );
+
+                // Mark InProgress on first open, so the MSP dashboard shows the
+                // reviewer has picked it up.
+                If(
+                    varCase.CaseStatus.Value = "Assigned",
+                    Patch(eCAF_ReviewCases, varCase, {CaseStatus: {Value: "InProgress"}})
+                )
+
+        Children:
+
+            # ===============================================================
+            # Case header — FIN is the only encounter identity shown
+            # ===============================================================
+            - lblCaseHeader:
+                Control: Label
+                Properties:
+                    Text: |
+                        =varCase.Title & "   ·   FIN " & varCase.FIN
+                            & "   ·   " & Text(varCase.EncounterDate, "dd mmm yyyy")
+                            & "   ·   " & varCase.EncounterType.Value
+                    Size: =16
+                    FontWeight: =FontWeight.Bold
+                    X: =40
+                    Y: =24
+
+            - lblReviewTypeBanner:
+                Control: Label
+                Properties:
+                    # The reviewer is told what their review will and will not
+                    # count toward. A cross-specialty reviewer who thinks they
+                    # are filling an OPPE floor slot will not chase the MSP when
+                    # the count does not move.
+                    Text: |
+                        =varCase.ReviewPurpose.Value & " · " & varCase.ReviewType.Value
+                            & If(
+                                varCase.ReviewType.Value in nfDenominatorTypes,
+                                "  —  counts toward the OPPE floor and 455 item 11 denominators",
+                                "  —  competency aggregates and narrative only; not counted in
+                                   the OPPE floor or 455 item 11 denominators"
+                            )
+                    Size: =11
+                    Color: =RGBA(90, 95, 105, 1)
+                    X: =40
+                    Y: =56
+
+            # ===============================================================
+            # SECTION 1 — Fixed instrument
+            # ===============================================================
+            - lblSection1:
+                Control: Label
+                Properties:
+                    Text: ="1. Required elements (all cases)"
+                    Size: =16
+                    FontWeight: =FontWeight.Semibold
+                    X: =40
+                    Y: =110
+
+            # --- DHA 455 item 11 element block --------------------------
+            - galItem11:
+                Control: Gallery
+                Variant: Vertical
+                Properties:
+                    X: =40
+                    Y: =150
+                    Width: =620
+                    Height: =220
+                    Items: =colItem11Answers
+                Children:
+                    - lblElement:
+                        Control: Label
+                        Properties:
+                            Text: =ThisItem.ElementLabel
+                            Width: =380
+                    - radElementResult:
+                        Control: Radio
+                        Properties:
+                            Layout: =Layout.Horizontal
+                            # The radio items ARE the canonical strings. There is
+                            # no display-to-storage mapping, so there is no step
+                            # at which a variant like "Not Met" could be created.
+                            # This is the normalization hard rule, implemented by
+                            # removing the opportunity rather than by validating
+                            # after the fact.
+                            Items: =["MET", "NOT_MET", "NA"]
+                            Default: =ThisItem.Result
+                            OnChange: |
+                                =Patch(
+                                    colItem11Answers,
+                                    ThisItem,
+                                    {Result: Self.Selected.Value}
+                                );
+                                UpdateContext({ctxDirty: true})
+
+            # --- 16 competency constructs, grouped by domain -------------
+            - galDomains:
+                Control: Gallery
+                Variant: Vertical
+                Properties:
+                    X: =700
+                    Y: =150
+                    Width: =620
+                    Height: =420
+                    Items: =GroupBy(colConstructAnswers, "Domain", "DomainConstructs")
+                Children:
+                    - lblDomainName:
+                        Control: Label
+                        Properties:
+                            Text: =ThisItem.Domain
+                            FontWeight: =FontWeight.Semibold
+                    - galConstructs:
+                        Control: Gallery
+                        Variant: Vertical
+                        Properties:
+                            Items: =ThisItem.DomainConstructs
+                        Children:
+                            - lblConstruct:
+                                Control: Label
+                                Properties:
+                                    Text: =ThisItem.ConstructLabel
+                            - radConstruct:
+                                Control: Radio
+                                Properties:
+                                    Layout: =Layout.Horizontal
+                                    Items: =["Satisfactory", "Unsatisfactory", "NotObserved"]
+                                    Default: =ThisItem.Result
+                                    OnChange: |
+                                        =Patch(
+                                            colConstructAnswers,
+                                            ThisItem,
+                                            {Result: Self.Selected.Value}
+                                        );
+                                        UpdateContext({ctxDirty: true})
+
+            - ddOverall:
+                Control: Dropdown
+                Properties:
+                    X: =40
+                    Y: =390
+                    Items: =["Satisfactory", "Unsatisfactory"]
+                    Default: =varSummary.OverallDetermination.Value
+
+            - lblNoItem12:
+                Control: Label
+                Properties:
+                    # Stated on the reviewer's screen, not just in the template,
+                    # so nobody goes looking for the Poor/Fair/Good/Superior
+                    # rating and improvises one.
+                    Text: |
+                        ="This determination does not produce a DHA 455 item 12 rating.
+                        Item 12 (Poor/Fair/Good/Superior) is the clinical supervisor's
+                        and is left blank by this system — no crosswalk exists between
+                        the two scales."
+                    Size: =10
+                    Color: =RGBA(90, 95, 105, 1)
+                    X: =40
+                    Y: =426
+                    Width: =620
+
+            - txtNarrative:
+                Control: TextInput
+                Properties:
+                    Mode: =TextMode.MultiLine
+                    X: =40
+                    Y: =490
+                    Width: =620
+                    Height: =110
+                    Default: =varSummary.Narrative
+                    HintText: ="Narrative. No patient identifiers beyond the case FIN."
+
+            # ===============================================================
+            # SECTION 2 — Standards checklist (standards-driven)
+            # ===============================================================
+            - lblSection2:
+                Control: Label
+                Properties:
+                    Text: ="2. Standards"
+                    Size: =16
+                    FontWeight: =FontWeight.Semibold
+                    X: =40
+                    Y: =620
+
+            - galStandards:
+                Control: Gallery
+                Variant: Vertical
+                Properties:
+                    X: =40
+                    Y: =660
+                    Width: =1280
+                    Height: =420
+                    # THE standards-driven filter. Note it keys on the CASE's
+                    # RequiredReviewerSpecialty, not the provider's specialty:
+                    # on a cross-specialty case those differ, and the reviewer
+                    # must be asked the standards of the specialty they were
+                    # selected to represent.
+                    #
+                    # Status and Specialty are both indexed, so this delegates.
+                    Items: |
+                        =SortByColumns(
+                            Filter(
+                                eCAF_Standards,
+                                Status <> "RETIRED",
+                                Specialty.Value in [
+                                    "Universal",
+                                    varCase.RequiredReviewerSpecialty.Value
+                                ]
+                            ),
+                            "Title",
+                            SortOrder.Ascending
+                        )
+                Children:
+                    - lblStandardId:
+                        Control: Label
+                        Properties:
+                            Text: =ThisItem.Title
+                            FontWeight: =FontWeight.Semibold
+                            Width: =120
+
+                    - lblDraftBadge:
+                        Control: Label
+                        Properties:
+                            # Amber DRAFT badge. The reviewer answers it, and it
+                            # counts on the dashboard, but it will not appear in
+                            # any generated document until a Clinical Leader
+                            # validates it.
+                            Visible: =ThisItem.Status.Value = "DRAFT-VALIDATE"
+                            Text: ="DRAFT"
+                            Fill: =RGBA(255, 190, 60, 1)
+                            Color: =RGBA(60, 40, 0, 1)
+                            Size: =9
+                            Width: =56
+
+                    - lblStandardText:
+                        Control: Label
+                        Properties:
+                            Text: =ThisItem.StandardText
+                            Width: =620
+
+                    - lblCitation:
+                        Control: Label
+                        Properties:
+                            Text: =ThisItem.SourceCitation
+                            Size: =9
+                            Color: =RGBA(120, 125, 135, 1)
+                            Width: =620
+
+                    - radStandardResult:
+                        Control: Radio
+                        Properties:
+                            Layout: =Layout.Horizontal
+                            Items: =["MET", "NOT_MET", "NA"]
+                            Default: |
+                                =LookUp(
+                                    colMyResponses,
+                                    Standard.Id = ThisItem.ID,
+                                    Result.Value
+                                )
+                            # Autosave. Patch-per-toggle against the real list,
+                            # then mirror into colMyResponses so the gallery does
+                            # not need a requery to stay consistent.
+                            OnChange: |
+                                =With(
+                                    {
+                                        existing: LookUp(
+                                            eCAF_ReviewResponses,
+                                            ReviewCase.Id = varCase.ID And Standard.Id = ThisItem.ID
+                                        )
+                                    },
+                                    Set(
+                                        varSavedResponse,
+                                        Patch(
+                                            eCAF_ReviewResponses,
+                                            Coalesce(existing, Defaults(eCAF_ReviewResponses)),
+                                            {
+                                                Title: varCase.Title & "-" & ThisItem.Title,
+                                                ReviewCase: {Id: varCase.ID, Value: varCase.Title},
+                                                Standard: {Id: ThisItem.ID, Value: ThisItem.Title},
+                                                // Canonical value, taken straight
+                                                // from the radio. No mapping.
+                                                Result: {Value: Self.Selected.Value}
+                                            }
+                                        )
+                                    )
+                                );
+                                If(
+                                    IsError(varSavedResponse),
+                                    Notify(
+                                        "Not saved — " & FirstError.Message
+                                            & ". Your answer is still on screen; try again.",
+                                        NotificationType.Error
+                                    ),
+                                    // Keep the local mirror in step.
+                                    ClearCollect(
+                                        colMyResponses,
+                                        Filter(eCAF_ReviewResponses, ReviewCase.Id = varCase.ID)
+                                    )
+                                )
+
+                    - txtStandardComment:
+                        Control: TextInput
+                        Properties:
+                            Width: =420
+                            HintText: ="Comment (optional). No patient identifiers."
+                            Default: |
+                                =LookUp(colMyResponses, Standard.Id = ThisItem.ID, Comment)
+                            # Comments save on blur rather than per keystroke.
+                            OnChange: |
+                                =Patch(
+                                    eCAF_ReviewResponses,
+                                    LookUp(
+                                        eCAF_ReviewResponses,
+                                        ReviewCase.Id = varCase.ID And Standard.Id = ThisItem.ID
+                                    ),
+                                    {Comment: Self.Text}
+                                )
+
+            # ===============================================================
+            # Submit
+            # ===============================================================
+            - lblUnanswered:
+                Control: Label
+                Properties:
+                    Text: |
+                        =With(
+                            {
+                                stdTotal: CountRows(
+                                    Filter(
+                                        eCAF_Standards,
+                                        Status <> "RETIRED",
+                                        Specialty.Value in ["Universal", varCase.RequiredReviewerSpecialty.Value]
+                                    )
+                                ),
+                                stdDone: CountRows(colMyResponses),
+                                elDone: CountRows(Filter(colItem11Answers, !IsBlank(Result))),
+                                elTotal: CountRows(colItem11Answers),
+                                ctDone: CountRows(Filter(colConstructAnswers, !IsBlank(Result))),
+                                ctTotal: CountRows(colConstructAnswers)
+                            },
+                            "Elements " & elDone & "/" & elTotal
+                                & "   ·   Competencies " & ctDone & "/" & ctTotal
+                                & "   ·   Standards " & stdDone & "/" & stdTotal
+                        )
+                    X: =40
+                    Y: =1100
+
+            - btnSubmit:
+                Control: Button
+                Properties:
+                    X: =40
+                    Y: =1140
+                    Text: ="Submit review"
+                    # Every required answer present, or the button stays off.
+                    DisplayMode: |
+                        =If(
+                            CountRows(Filter(colItem11Answers, IsBlank(Result))) = 0
+                                And CountRows(Filter(colConstructAnswers, IsBlank(Result))) = 0
+                                And !IsBlank(ddOverall.Selected.Value)
+                                And CountRows(colMyResponses) >= CountRows(
+                                    Filter(
+                                        eCAF_Standards,
+                                        Status <> "RETIRED",
+                                        Specialty.Value in ["Universal", varCase.RequiredReviewerSpecialty.Value]
+                                    )
+                                ),
+                            DisplayMode.Edit,
+                            DisplayMode.Disabled
+                        )
+                    OnSelect: |
+                        =Set(varSubmitError, "");
+
+                        // Re-serialise both blobs as JSON ARRAYS of {key,result}.
+                        // Array, not object map, so the aggregation can look up
+                        // an element by a variable key — see fixed-instrument.json.
+                        Set(
+                            varItem11Json,
+                            "[" & Concat(
+                                colItem11Answers,
+                                "{""key"":""" & ElementKey & """,""result"":""" & Result & """}",
+                                ","
+                            ) & "]"
+                        );
+
+                        Set(
+                            varConstructJson,
+                            "[" & Concat(
+                                colConstructAnswers,
+                                "{""key"":""" & ConstructKey & """,""result"":""" & Result & """}",
+                                ","
+                            ) & "]"
+                        );
+
+                        Set(
+                            varSavedSummary,
+                            Patch(
+                                eCAF_ReviewSummaries,
+                                Coalesce(varSummary, Defaults(eCAF_ReviewSummaries)),
+                                {
+                                    Title: "SUM-" & varCase.Title,
+                                    ReviewCase: {Id: varCase.ID, Value: varCase.Title},
+                                    OverallDetermination: {Value: ddOverall.Selected.Value},
+                                    Item11Elements: varItem11Json,
+                                    CompetencyDomains: varConstructJson,
+                                    Narrative: txtNarrative.Text,
+                                    CompletedDate: gblToday
+                                }
+                            )
+                        );
+
+                        If(
+                            IsError(varSavedSummary),
+                            Set(varSubmitError, "Review not submitted. " & FirstError.Message),
+
+                            // Only flip the case to Complete once the summary is
+                            // safely written. The reverse order would let a
+                            // failed summary write leave a Complete case with no
+                            // summary, which silently corrupts every denominator
+                            // that counts Complete cases.
+                            Patch(
+                                eCAF_ReviewCases,
+                                varCase,
+                                {CaseStatus: {Value: "Complete"}}
+                            );
+                            Notify("Review submitted for " & varCase.Title, NotificationType.Success);
+                            Navigate(S1_Dashboard)
+                        )
+
+            - lblSubmitError:
+                Control: Label
+                Properties:
+                    Visible: =!IsBlank(varSubmitError)
+                    Text: =varSubmitError
+                    Color: =RGBA(168, 0, 0, 1)
+                    X: =40
+                    Y: =1190
+                    Width: =700
+
+            - cmpFooter:
+                Control: CanvasComponent
+                ComponentName: cmpCUIFooter
+                Properties:
+                    X: =0
+                    Y: =Parent.Height - 40
+                    Width: =Parent.Width

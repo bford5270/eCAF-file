@@ -1,0 +1,41 @@
+# cmpCUIFooter — the mandatory marking, as a component.
+#
+# CLAUDE.md hard rule: the CUI / 10 U.S.C. § 1102 banner appears on EVERY screen.
+# It is a component so there is exactly one definition to review, and so a screen
+# added later cannot quietly ship without it. dist/app/README.md carries the
+# screen checklist; tools/lint_hard_rules.py fails the build if any *.fx.yaml
+# screen file has no cmpCUIFooter instance.
+#
+# The text comes from the App named formula nfCUIBanner, which is a literal —
+# not a config lookup. A marking that a data edit can remove is not a marking.
+
+ComponentDefinitions:
+    cmpCUIFooter:
+        DefinitionType: CanvasComponent
+        Properties:
+            Height: =40
+            Width: =Parent.Width
+        Children:
+            - recFooterBar:
+                Control: Rectangle
+                Properties:
+                    Fill: =RGBA(120, 15, 15, 1)      # CUI banner red
+                    Height: =Parent.Height
+                    Width: =Parent.Width
+                    X: =0
+                    Y: =0
+            - lblCUIBanner:
+                Control: Label
+                Properties:
+                    Text: =nfCUIBanner
+                    Color: =RGBA(255, 255, 255, 1)
+                    Size: =11
+                    FontWeight: =FontWeight.Semibold
+                    Align: =Align.Center
+                    VerticalAlign: =VerticalAlign.Middle
+                    Height: =Parent.Height
+                    Width: =Parent.Width
+                    X: =0
+                    Y: =0
+                    # Not selectable, not copyable-away, not dismissible.
+                    DisplayMode: =DisplayMode.View

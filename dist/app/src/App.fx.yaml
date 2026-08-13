@@ -1,0 +1,512 @@
+#  eCAF — App object
+#  Power Apps canvas source (Power Fx YAML). Pack with:
+#     pac canvas pack --sources dist/app/src --msapp dist/app/eCAF.msapp
+#  See dist/app/README.md for the round-trip caveat before you try that.
+#
+#  CUI // Medical Quality Assurance Program document protected pursuant to
+#  10 U.S.C. § 1102
+
+App:
+    Properties:
+
+        # ------------------------------------------------------------------
+        # OnStart is deliberately thin. Anything that can be a named formula
+        # below is a named formula: named formulas are lazy and recalculate,
+        # OnStart runs once and blocks the first screen. The only things here
+        # are the two collections the UDFs need in memory and the role
+        # resolution, which hits a connector and must not re-run per control.
+        # ------------------------------------------------------------------
+        OnStart: |
+            =Concurrent(
+
+                // 66 rows. One round trip, then business-day math is local.
+                ClearCollect(
+                    colHolidays,
+                    ShowColumns(eCAF_Holidays, "HolidayDate", "HolidayName")
+                ),
+
+                // The fixed instrument (455 item 11 elements + the 16 competency
+                // constructs) ships as a JSON file inside the app rather than a
+                // list: it is form structure, not operational data, and it must
+                // not be editable by anyone who can edit a list.
+                ClearCollect(
+                    colItem11Elements,
+                    ForAll(
+                        Table(ParseJSON(varFixedInstrumentJson).item11Elements),
+                        {
+                            ElementKey: Text(ThisRecord.Value.key),
+                            ElementLabel: Text(ThisRecord.Value.label)
+                        }
+                    )
+                ),
+
+                ClearCollect(
+                    colConstructs,
+                    ForAll(
+                        Table(ParseJSON(varFixedInstrumentJson).competencyConstructs),
+                        {
+                            ConstructKey: Text(ThisRecord.Value.key),
+                            Domain: Text(ThisRecord.Value.domain),
+                            ConstructLabel: Text(ThisRecord.Value.label)
+                        }
+                    )
+                )
+            );
+
+            Set(gblMe, User());
+            Set(gblToday, Today());
+
+            // --- Role resolution ------------------------------------------
+            // Primary path is Office 365 Groups. In a DoD enclave that connector
+            // is commonly blocked or unlicensed, so the eCAF_RoleMap list is a
+            // first-class fallback, not a nicety. IfError, not If: a blocked
+            // connector throws rather than returning empty.
+            //
+            // This is UX only. A user who spoofs their way to gblRole="MSP"
+            // sees MSP menu items and still gets access denied by SharePoint on
+            // every read. The permission groups are the boundary — see
+            // dist/lists/provisioning-runbook.md.
+            Set(
+                gblRole,
+                IfError(
+                    Switch(
+                        true,
+                        UserInGroup("eCAF-MSP"),              "MSP",
+                        UserInGroup("eCAF-ClinicalLeaders"),  "ClinicalLeader",
+                        UserInGroup("eCAF-Reviewers"),        "Reviewer",
+                        UserInGroup("eCAF-Preceptors"),       "Preceptor",
+                        UserInGroup("eCAF-Providers"),        "Provider",
+                        "None"
+                    ),
+                    // Fallback: maintained list.
+                    Coalesce(
+                        LookUp(
+                            eCAF_RoleMap,
+                            Lower(Title) = Lower(gblMe.Email) And Active = true,
+                            RoleName
+                        ),
+                        "None"
+                    )
+                )
+            );
+
+            Set(
+                gblMyDepartment,
+                Coalesce(
+                    LookUp(eCAF_RoleMap, Lower(Title) = Lower(gblMe.Email), Department),
+                    ""
+                )
+            );
+
+            // Which specialty this user may validate standards for (S8). Taken
+            // from the role map, falling back to their own provider record when
+            // they have one — many Clinical Leaders are also privileged providers.
+            Set(
+                gblMySpecialty,
+                Coalesce(
+                    LookUp(eCAF_RoleMap, Lower(Title) = Lower(gblMe.Email), Specialty),
+                    LookUp(eCAF_Providers, Lower(ClinicalSupervisor.Email) = Lower(gblMe.Email), Specialty.Value),
+                    ""
+                )
+            );
+
+            // The closed MapsTo vocabulary from standards-schema.json, used by
+            // S8 to reject a typo'd token before it can silently drop a standard
+            // out of every document it should have fed.
+            // tools/lint_hard_rules.py enforces the identical list at build time;
+            // if you add a token, add it in both places.
+            ClearCollect(
+                colValidTokens,
+                ["FPPE-3E", "FPPE-3F", "FPPE-3I", "FPPE-3J", "FPPE-3L",
+                 "FPPE-4-PC", "FPPE-4-PK", "FPPE-4-PBLI", "FPPE-4-ICS",
+                 "OPPE-IIIF", "OPPE-IVD", "OPPE-IVE", "OPPE-IVF", "OPPE-IVG",
+                 "OPPE-IVH", "OPPE-V", "455-I13", "DASH-ONLY"]
+            );
+
+            // A user with no role gets the access-request screen, never a
+            // half-populated dashboard that looks like it failed to load.
+            If(gblRole = "None", Navigate(S0_NoAccess), Navigate(S1_Dashboard))
+
+    Formulas: |
+        // ==================================================================
+        // CUI marking
+        // ==================================================================
+        // Deliberately a literal, NOT read from eCAF_Config. The banner is a
+        // mandatory marking; if it came from a list, deleting one list row
+        // would silently strip the marking from every screen and every
+        // generated document. eCAF_Config!CUIBanner exists so the required
+        // text is auditable in one place — it is not the source the app reads.
+        nfCUIBanner = "CUI // Medical Quality Assurance Program document protected pursuant to 10 U.S.C. § 1102";
+
+        // ==================================================================
+        // Configuration — the credentials-committee-reversible knobs
+        // ==================================================================
+        // CLAUDE.md: the ReviewType denominator rule must be data, not a
+        // hard-code. Everything downstream reads nfDenominatorTypes; the string
+        // "Peer" appears nowhere else in a filter.
+        // Coalesce guards a missing config row: the default must fail SAFE,
+        // meaning the narrower Peer-only denominator, never a wider one.
+        nfDenominatorTypes =
+            Split(
+                Coalesce(
+                    LookUp(eCAF_Config, Title = "DenominatorReviewTypes", ConfigValue),
+                    "Peer"
+                ),
+                ";"
+            );
+
+        nfOPPEFloor =
+            Coalesce(
+                Value(LookUp(eCAF_Config, Title = "OPPEReviewFloor", ConfigValue)),
+                10
+            );
+
+        nfSuspenseBusinessDays =
+            Coalesce(
+                Value(LookUp(eCAF_Config, Title = "DefaultSuspenseBusinessDays", ConfigValue)),
+                10
+            );
+
+        nfOverdueGraceDays =
+            Coalesce(
+                Value(LookUp(eCAF_Config, Title = "OverdueGraceBusinessDays", ConfigValue)),
+                2
+            );
+
+        nfPrivilegeWarnDays =
+            Coalesce(
+                Value(LookUp(eCAF_Config, Title = "PrivilegeExpiryWarningDays", ConfigValue)),
+                90
+            );
+
+        // ==================================================================
+        // Role predicates — read these, never compare gblRole inline
+        // ==================================================================
+        nfIsMSP    = gblRole = "MSP";
+        nfIsCL     = gblRole = "ClinicalLeader";
+        nfIsMSPorCL = gblRole in ["MSP", "ClinicalLeader"];
+        nfIsReviewer = gblRole = "Reviewer";
+
+        // ==================================================================
+        // Business-day math  (CLAUDE.md: exclude weekends + federal holidays)
+        // ==================================================================
+        // Implemented by generating candidate dates and filtering, not by
+        // arithmetic on weekday indexes. The arithmetic version is shorter and
+        // wrong whenever a holiday lands inside the span — which for a 10
+        // business day suspense happens in 7 of 12 months.
+        //
+        // Sequence headroom: n calendar-days-per-business-day never exceeds
+        // ~1.8 even across Thanksgiving/Christmas, so n*2+10 always contains
+        // at least n business days.
+
+        AddBusinessDays(startDate: Date, n: Number): Date =
+            Last(
+                FirstN(
+                    Filter(
+                        AddColumns(
+                            Sequence(n * 2 + 10, 1),
+                            "candidate",
+                            DateAdd(startDate, Value, TimeUnit.Days)
+                        ),
+                        // Weekday(..., Monday) is 1=Mon .. 7=Sun
+                        Weekday(candidate, StartOfWeek.Monday) <= 5
+                            And IsBlank(LookUp(colHolidays, HolidayDate = candidate))
+                    ),
+                    n
+                )
+            ).candidate;
+
+        BusinessDaysBetween(startDate: Date, endDate: Date): Number =
+            If(
+                endDate <= startDate,
+                0,
+                CountRows(
+                    Filter(
+                        AddColumns(
+                            Sequence(DateDiff(startDate, endDate, TimeUnit.Days), 1),
+                            "candidate",
+                            DateAdd(startDate, Value, TimeUnit.Days)
+                        ),
+                        Weekday(candidate, StartOfWeek.Monday) <= 5
+                            And IsBlank(LookUp(colHolidays, HolidayDate = candidate))
+                    )
+                )
+            );
+
+        // Overdue is "past suspense by more than the grace period, in business
+        // days" — matching F2. The dashboard card and the flow must agree or the
+        // MSP sees a case the nightly flow has not escalated.
+        IsOverdue(suspense: Date, status: Text): Boolean =
+            status <> "Complete"
+                And BusinessDaysBetween(suspense, gblToday) > nfOverdueGraceDays;
+
+        // ==================================================================
+        // FIN validation  (CLAUDE.md: FIN is the only encounter identifier)
+        // ==================================================================
+        // A structural speed bump in front of the two commonest wrong pastes —
+        // an SSN and a dashed MRN. It cannot tell a valid FIN from an invalid
+        // one; only the person typing can. Its job is to make the obvious
+        // mistake loud at the moment it is made, not to certify the input.
+        FINLooksValid(fin: Text): Boolean =
+            With(
+                {t: Trim(fin)},
+                Len(t) > 0
+                    And Len(t) <= 12
+                    // Alphanumeric only. Rejects dashed/slashed identifiers,
+                    // which is most of what an MRN or SSN paste looks like.
+                    And IsMatch(t, "^[A-Za-z0-9]+$")
+                    // Nine straight digits is an SSN far more often than a FIN.
+                    And !IsMatch(t, "^\d{9}$")
+            );
+
+        // ==================================================================
+        // Denominator integrity  (CLAUDE.md hard rule)
+        // ==================================================================
+        // The single place that decides whether a case counts toward the OPPE
+        // floor and the DHA 455 item 11 denominators. Every aggregate calls
+        // this. If this is right, they are all right.
+        CountsInDenominator(reviewType: Text, caseStatus: Text): Boolean =
+            caseStatus = "Complete" And reviewType in nfDenominatorTypes;
+
+        // ==================================================================
+        // Aggregation
+        // ==================================================================
+        // Pattern for every aggregate below: filter SERVER-side on indexed
+        // columns first (Provider, ReviewPurpose, CaseStatus, EncounterDate),
+        // then apply the ReviewType test in memory. ReviewType is not indexed,
+        // and putting it in the delegable Filter would silently cap the result
+        // set at 500/2000 rows and quietly understate every denominator.
+
+        QualifyingCases(providerId: Number, periodStart: Date, periodEnd: Date): Table =
+            Filter(
+                Filter(
+                    eCAF_ReviewCases,
+                    Provider.Id = providerId,
+                    CaseStatus = "Complete",
+                    EncounterDate >= periodStart,
+                    EncounterDate <= periodEnd
+                ),
+                CountsInDenominator(ReviewType, CaseStatus)
+            );
+
+        // OPPE floor: count of qualifying OPPE reviews in the provider's period.
+        OPPEReviewCount(providerId: Number, periodStart: Date, periodEnd: Date): Number =
+            CountRows(
+                Filter(
+                    QualifyingCases(providerId, periodStart, periodEnd),
+                    ReviewPurpose = "OPPE"
+                )
+            );
+
+        OPPEFloorMet(providerId: Number, periodStart: Date, periodEnd: Date): Boolean =
+            OPPEReviewCount(providerId, periodStart, periodEnd) >= nfOPPEFloor;
+
+        // --- DHA 455 item 11 element ratios -------------------------------
+        // met / (met + not_met). NA excluded from BOTH sides — an NA is not a
+        // failure and not a success, it is not a data point.
+        //
+        // Item11Elements is a JSON ARRAY of {key,result}, not an object map,
+        // precisely so elementKey can be a variable here. See
+        // fixed-instrument.json _blobShape.
+        //
+        // The counts below read colItem11Flat — one row per (case, element) —
+        // because unpacking a JSON column requires ClearCollect, which is a
+        // behavior function and cannot live in a named formula. That collection
+        // is built by RefreshAggregates on S6_DocumentStaging; every screen that
+        // reads an Item11* formula calls RefreshAggregates in OnVisible first.
+        // Columns: ProviderId, CaseId, EncounterDate, ElementKey, Result.
+
+        Item11Met(providerId: Number, periodStart: Date, periodEnd: Date, elementKey: Text): Number =
+            CountRows(
+                Filter(
+                    colItem11Flat,
+                    ProviderId = providerId,
+                    ElementKey = elementKey,
+                    Result = "MET",
+                    EncounterDate >= periodStart,
+                    EncounterDate <= periodEnd
+                )
+            );
+
+        Item11Denominator(providerId: Number, periodStart: Date, periodEnd: Date, elementKey: Text): Number =
+            CountRows(
+                Filter(
+                    colItem11Flat,
+                    ProviderId = providerId,
+                    ElementKey = elementKey,
+                    Result in ["MET", "NOT_MET"],   // NA excluded, by design
+                    EncounterDate >= periodStart,
+                    EncounterDate <= periodEnd
+                )
+            );
+
+        // Renders "7 of 9 (78%)", or "no data" when the denominator is zero.
+        // Never renders "0%" for an empty denominator — that reads as a failure
+        // rather than an absence, and it is the kind of thing that ends up
+        // quoted in a credentials committee.
+        Item11Display(providerId: Number, periodStart: Date, periodEnd: Date, elementKey: Text): Text =
+            With(
+                {
+                    m: Item11Met(providerId, periodStart, periodEnd, elementKey),
+                    d: Item11Denominator(providerId, periodStart, periodEnd, elementKey)
+                },
+                If(
+                    d = 0,
+                    "no data",
+                    m & " of " & d & " (" & Round(m / d * 100, 0) & "%)"
+                )
+            );
+
+        // ==================================================================
+        // In-app document generation  (the F6 fallback, built regardless)
+        // ==================================================================
+        // Produces HTML that Word opens natively, saved with a .doc extension.
+        // No premium connector, no license. CLAUDE.md requires this path to
+        // exist whether or not Word Online (Business) is available.
+        //
+        // The CUI marking is written into the document's own header and footer
+        // here, not added by a later step — a generated file leaves the app and
+        // must carry its marking with it.
+
+        DocHtmlHead(docTitle: Text): Text =
+            "<html xmlns:w=""urn:schemas-microsoft-com:office:word""><head><meta charset=""utf-8"">"
+            & "<style>"
+            & "@page { mso-header: h1; mso-footer: f1; margin: 1in; }"
+            & "body { font-family: 'Times New Roman', serif; font-size: 11pt; }"
+            & "table { border-collapse: collapse; width: 100%; }"
+            & "td, th { border: 1px solid #666; padding: 4pt; font-size: 10pt; }"
+            & ".cui { color: #7a0f0f; font-weight: bold; text-align: center; font-size: 9pt; }"
+            & ".verify { color: #a80000; font-weight: bold; }"
+            & ".blankbox { border: 1px solid #666; height: 28pt; }"
+            & "</style></head><body>"
+            & "<div class=""cui"">" & nfCUIBanner & "</div>"
+            & "<h2 style=""text-align:center"">" & docTitle & "</h2>";
+
+        DocHtmlFoot(): Text =
+            "<br><div class=""cui"">" & nfCUIBanner & "</div>"
+            & "<div style=""font-size:8pt;text-align:center"">Generated "
+            & Text(Now(), "dd mmm yyyy hh:mm") & " by e-CAF. "
+            & "Not a system of record — CCQAS remains the system of record for OPPE.</div>"
+            & "</body></html>";
+
+        // Item 12 renders as an empty bordered box with the note beside it.
+        // There is no parameter to this that could fill it in.
+        DocItem12Block(): Text =
+            "<h3>Item 12 — Overall rating</h3>"
+            & "<table><tr><td style=""width:25%"">Poor</td><td style=""width:25%"">Fair</td>"
+            & "<td style=""width:25%"">Good</td><td style=""width:25%"">Superior</td></tr>"
+            & "<tr><td class=""blankbox""></td><td class=""blankbox""></td>"
+            & "<td class=""blankbox""></td><td class=""blankbox""></td></tr></table>"
+            & "<p class=""verify"">Clinical supervisor determination required. "
+            & "This system displays aggregate evidence and does not rate item 12.</p>";
+
+        BuildDocumentHtml(providerId: Number, periodStart: Date, periodEnd: Date, docType: Text): Text =
+            With(
+                {
+                    prov: LookUp(eCAF_Providers, ID = providerId),
+                    belowFloor: OPPEReviewCount(providerId, periodStart, periodEnd) < nfOPPEFloor
+                },
+                DocHtmlHead(docType & " — " & prov.Title)
+
+                & "<table>"
+                & "<tr><td><b>Provider</b></td><td>" & prov.Title & "</td>"
+                & "<td><b>Specialty</b></td><td>" & prov.Specialty.Value & "</td></tr>"
+                & "<tr><td><b>Period</b></td><td>" & Text(periodStart, "dd mmm yyyy")
+                    & " – " & Text(periodEnd, "dd mmm yyyy") & "</td>"
+                & "<td><b>Privileging status</b></td><td>" & prov.PrivilegingStatus.Value & "</td></tr>"
+                & "</table>"
+
+                // Qualifying-review count, stated plainly, including when short.
+                & "<h3>Review basis</h3><p>"
+                & OPPEReviewCount(providerId, periodStart, periodEnd) & " of " & nfOPPEFloor
+                & " qualifying peer reviews completed in period."
+                & If(
+                    belowFloor,
+                    " <span class=""verify"">BELOW THE REVIEW FLOOR — ratios below are marked "
+                        & "[VERIFY] and are not a completed OPPE.</span>",
+                    ""
+                )
+                & "</p>"
+
+                // --- item 11 element ratios
+                & "<h3>Element results</h3><table><tr><th>Element</th><th>Result</th></tr>"
+                & Concat(
+                    colItem11Elements,
+                    "<tr><td>" & ElementLabel & "</td><td>"
+                        & With(
+                            {v: Item11Display(providerId, periodStart, periodEnd, ElementKey)},
+                            If(
+                                v = "no data" Or belowFloor,
+                                "<span class=""verify"">[VERIFY] " & v & "</span>",
+                                v
+                            )
+                        )
+                        & "</td></tr>"
+                )
+                & "</table>"
+
+                // --- standards: ACTIVE only. DRAFT-VALIDATE excluded, hard rule.
+                & "<h3>Standards</h3><table><tr><th>ID</th><th>Standard</th><th>Met rate</th></tr>"
+                & Concat(
+                    Filter(
+                        eCAF_Standards,
+                        Status = "ACTIVE",
+                        Specialty.Value in ["Universal", prov.Specialty.Value]
+                    ),
+                    "<tr><td>" & Title & "</td><td>" & StandardText & "</td><td>"
+                        & With(
+                            {r: StandardMetRate(ID, "All")},
+                            If(
+                                IsBlank(r),
+                                "<span class=""verify"">[VERIFY] no data</span>",
+                                Round(r * 100, 0) & "%"
+                            )
+                        )
+                        & "</td></tr>"
+                )
+                & "</table>"
+
+                & If(docType = "DHA455 PAR", DocItem12Block(), "")
+
+                & "<h3>Endorsements</h3><table>"
+                & "<tr><th>Stage</th><th>Name</th><th>Signature</th><th>Date</th></tr>"
+                & Concat(
+                    Switch(
+                        docType,
+                        "OPPE Product", ["Provider", "Peer/Proctor", "CRC Chair", "Department Head"],
+                        "FPPE Product", ["Preceptor", "Clinical Leader"],
+                        ["Clinical Supervisor"]
+                    ),
+                    "<tr><td>" & Value & "</td><td class=""blankbox""></td>"
+                        & "<td class=""blankbox""></td><td class=""blankbox""></td></tr>"
+                )
+                & "</table>"
+
+                & DocHtmlFoot()
+            );
+
+        // --- Per-standard MET rate (cross-specialty dashboard) ------------
+        // Same met/(met+not_met) rule, grouped by standard rather than element.
+        // This one intentionally spans providers: it answers "which standards
+        // are we collectively worst at", which is the cross-specialty view.
+        StandardMetRate(standardId: Number, specialty: Text): Number =
+            With(
+                {
+                    rows: Filter(
+                        colResponseFlat,
+                        StandardId = standardId,
+                        specialty = "All" Or CaseSpecialty = specialty
+                    )
+                },
+                With(
+                    {
+                        m: CountRows(Filter(rows, Result = "MET")),
+                        d: CountRows(Filter(rows, Result in ["MET", "NOT_MET"]))
+                    },
+                    If(d = 0, Blank(), m / d)
+                )
+            );
+
+    # The fixed instrument JSON is embedded as an app resource rather than a
+    # list. varFixedInstrumentJson is set from the resource in OnStart of the
+    # host screen; see dist/app/README.md "Embedding fixed-instrument.json".

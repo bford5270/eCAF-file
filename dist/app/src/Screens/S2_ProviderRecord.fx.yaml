@@ -1,0 +1,191 @@
+# S2_ProviderRecord — the CAF itself: roster detail, document index, review
+# history, and the cycle timeline (FPPE window, OPPE period, privilege expiry).
+#
+# MSP and Clinical Leader only. A Clinical Leader sees providers in their own
+# department; that scoping is applied server-side in S1 and re-applied here so a
+# deep link cannot bypass it. (The real boundary is still SharePoint permissions.)
+
+Screens:
+    S2_ProviderRecord:
+        Properties:
+            Fill: =RGBA(245, 246, 248, 1)
+            OnVisible: |
+                =Set(varProvider, ctxProvider);
+                ClearCollect(
+                    colProviderCases,
+                    SortByColumns(
+                        Filter(eCAF_ReviewCases, Provider.Id = varProvider.ID),
+                        "EncounterDate",
+                        SortOrder.Descending
+                    )
+                )
+
+        Children:
+            - lblProviderName:
+                Control: Label
+                Properties:
+                    Text: =varProvider.Title & "  ·  " & varProvider.RankGrade & "  ·  " & varProvider.Service.Value
+                    Size: =22
+                    FontWeight: =FontWeight.Bold
+                    X: =40
+                    Y: =24
+
+            # ---------------------------------------------------------------
+            # Cycle timeline
+            # ---------------------------------------------------------------
+            - lblCycleTimeline:
+                Control: Label
+                Properties:
+                    Text: |
+                        ="OPPE period: " & Text(varProvider.OPPEPeriodStart, "dd mmm yyyy")
+                            & " – " & Text(varProvider.OPPEPeriodEnd, "dd mmm yyyy")
+                        & If(
+                            IsBlank(varProvider.FPPEWindowEnd),
+                            "",
+                            "     FPPE window ends: " & Text(varProvider.FPPEWindowEnd, "dd mmm yyyy")
+                                & " (" & BusinessDaysBetween(gblToday, varProvider.FPPEWindowEnd)
+                                & " business days)"
+                        )
+                        & "     Privileges expire: " & Text(varProvider.PrivilegeExpiration, "dd mmm yyyy")
+                    X: =40
+                    Y: =70
+                    Width: =1100
+
+            - lblStopEwpBanner:
+                Control: Label
+                Properties:
+                    Visible: |
+                        =varProvider.PrivilegeExpiration
+                            <= DateAdd(gblToday, nfPrivilegeWarnDays, TimeUnit.Days)
+                    Text: |
+                        ="STOP-EWP / legacy process determination required — privileges expire within "
+                            & nfPrivilegeWarnDays & " days (DHA-PM 6025.13 Vol 8)."
+                    Color: =RGBA(168, 0, 0, 1)
+                    FontWeight: =FontWeight.Semibold
+                    X: =40
+                    Y: =106
+                    Width: =1100
+
+            - lblStopAndResolve:
+                Control: Label
+                Properties:
+                    Visible: |
+                        =varProvider.PrivilegingStatus.Value = "Supervised"
+                            And varProvider.OperationalPlatform = true
+                    Text: |
+                        ="STOP AND RESOLVE — supervised privileges on an operational platform
+                        (BUMEDNOTE 6000). Supervision cannot be delivered as documented."
+                    Color: =RGBA(168, 0, 0, 1)
+                    FontWeight: =FontWeight.Bold
+                    X: =40
+                    Y: =134
+                    Width: =1100
+
+            # ---------------------------------------------------------------
+            # OPPE floor for this provider
+            # ---------------------------------------------------------------
+            - lblFloor:
+                Control: Label
+                Properties:
+                    Text: |
+                        =OPPEReviewCount(varProvider.ID, varProvider.OPPEPeriodStart, varProvider.OPPEPeriodEnd)
+                            & " of " & nfOPPEFloor & " qualifying peer reviews this OPPE period"
+                    Color: |
+                        =If(
+                            OPPEFloorMet(varProvider.ID, varProvider.OPPEPeriodStart, varProvider.OPPEPeriodEnd),
+                            RGBA(0, 120, 60, 1),
+                            RGBA(168, 0, 0, 1)
+                        )
+                    X: =40
+                    Y: =180
+
+            # ---------------------------------------------------------------
+            # Review history
+            # ---------------------------------------------------------------
+            - galReviewHistory:
+                Control: Gallery
+                Variant: Vertical
+                Properties:
+                    X: =40
+                    Y: =220
+                    Width: =700
+                    Height: =420
+                    Items: =colProviderCases
+                Children:
+                    - lblHistCase:
+                        Control: Label
+                        Properties:
+                            Text: |
+                                =ThisItem.Title & "  ·  " & Text(ThisItem.EncounterDate, "dd mmm yyyy")
+                                    & "  ·  " & ThisItem.ReviewPurpose.Value
+                                    & "  ·  " & ThisItem.ReviewType.Value
+                                    & "  ·  " & ThisItem.CaseStatus.Value
+                    - lblHistCounts:
+                        Control: Label
+                        Properties:
+                            Visible: =!(ThisItem.ReviewType.Value in nfDenominatorTypes)
+                            Text: ="not counted in floor / 455 denominators"
+                            Size: =9
+                            Color: =RGBA(120, 125, 135, 1)
+                    - lblHistDetermination:
+                        Control: Label
+                        Properties:
+                            Text: |
+                                =Coalesce(
+                                    LookUp(
+                                        eCAF_ReviewSummaries,
+                                        ReviewCase.Id = ThisItem.ID,
+                                        OverallDetermination.Value
+                                    ),
+                                    ""
+                                )
+
+            # ---------------------------------------------------------------
+            # CAF document index
+            # ---------------------------------------------------------------
+            - galDocuments:
+                Control: Gallery
+                Variant: Vertical
+                Properties:
+                    X: =770
+                    Y: =220
+                    Width: =470
+                    Height: =420
+                    # Folder-per-provider. Adverse-ForCause documents are held to
+                    # eCAF-MSP + PA by SharePoint permissions, so for anyone else
+                    # they simply do not come back in this query — the gallery
+                    # does not filter them out, the platform does.
+                    Items: |
+                        =Filter(
+                            eCAF_Documents,
+                            Provider = varProvider.Title
+                        )
+                Children:
+                    - lblDocName:
+                        Control: Label
+                        Properties:
+                            Text: =ThisItem.Name
+                    - lblDocCcqas:
+                        Control: Label
+                        Properties:
+                            Text: |
+                                =If(
+                                    ThisItem.UploadedToCCQAS = true,
+                                    "Uploaded to CCQAS " & Text(ThisItem.CCQASUploadDate, "dd mmm yyyy"),
+                                    "Not yet uploaded to CCQAS"
+                                )
+                            Size: =9
+                            Color: |
+                                =If(
+                                    ThisItem.UploadedToCCQAS = true,
+                                    RGBA(0, 120, 60, 1),
+                                    RGBA(140, 90, 0, 1)
+                                )
+
+            - cmpFooter:
+                Control: CanvasComponent
+                ComponentName: cmpCUIFooter
+                Properties:
+                    X: =0
+                    Y: =Parent.Height - 40
+                    Width: =Parent.Width

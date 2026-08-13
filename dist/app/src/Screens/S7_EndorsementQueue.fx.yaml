@@ -1,0 +1,179 @@
+# S7_EndorsementQueue — everything currently sitting with me for endorsement.
+#
+# Actions mirror the CCQAS Clinical Leader actions exactly: Recommend,
+# NotRecommend, ReturnWithoutAction. Advancing to the next stage is F7's job; if
+# flows are unavailable the MSP advances manually from here, which is why the
+# chain map is shown on screen rather than only living inside the flow.
+
+Screens:
+    S7_EndorsementQueue:
+        Properties:
+            Fill: =RGBA(245, 246, 248, 1)
+            OnVisible: |
+                =ClearCollect(
+                    colMyEndorsements,
+                    Filter(eCAF_Routing, CurrentHolder.Email = gblMe.Email, Action.Value = "Pending")
+                )
+
+        Children:
+            - lblTitle:
+                Control: Label
+                Properties:
+                    Text: ="Endorsement Queue"
+                    Size: =24
+                    FontWeight: =FontWeight.Bold
+                    X: =40
+                    Y: =24
+
+            - lblEmpty:
+                Control: Label
+                Properties:
+                    Visible: =CountRows(colMyEndorsements) = 0
+                    Text: ="Nothing awaiting your endorsement."
+                    X: =40
+                    Y: =80
+
+            - galEndorsements:
+                Control: Gallery
+                Variant: Vertical
+                Properties:
+                    X: =40
+                    Y: =80
+                    Width: =1200
+                    Height: =600
+                    Items: =colMyEndorsements
+                Children:
+                    - lblDoc:
+                        Control: Label
+                        Properties:
+                            Text: =ThisItem.Document.Value & "   ·   stage: " & ThisItem.Stage.Value
+                            FontWeight: =FontWeight.Semibold
+                            Width: =600
+
+                    - lblChainPosition:
+                        Control: Label
+                        Properties:
+                            # The chain maps from flows-spec.md, on screen. The
+                            # endorser can see what happens next and who it goes
+                            # to, which is what they actually want to know before
+                            # signing.
+                            Text: |
+                                =With(
+                                    {
+                                        chain: Switch(
+                                            Left(ThisItem.Document.Value, 4),
+                                            "OPPE", ["Provider", "PeerProctor", "CRCChair", "DepartmentHead"],
+                                            "FPPE", ["Preceptor", "ClinicalLeader"],
+                                            ["ClinicalSupervisor"]
+                                        )
+                                    },
+                                    "Chain: " & Concat(chain, Value, " → ")
+                                )
+                            Size: =9
+                            Color: =RGBA(120, 125, 135, 1)
+                            Width: =600
+
+                    - lblViewOnly:
+                        Control: Label
+                        Properties:
+                            # § 1102 channel discipline: the document stays in the
+                            # permissioned library. This screen links to it; it
+                            # does not attach it, mail it, or copy its content.
+                            Text: ="Open in library (content does not leave the site)"
+                            Color: =RGBA(0, 90, 180, 1)
+                            Width: =360
+
+                    - txtEndorsementComment:
+                        Control: TextInput
+                        Properties:
+                            Mode: =TextMode.MultiLine
+                            Width: =500
+                            Height: =70
+                            HintText: ="Comments"
+
+                    - btnRecommend:
+                        Control: Button
+                        Properties:
+                            Text: ="Recommend"
+                            OnSelect: |
+                                =Patch(
+                                    eCAF_Routing,
+                                    ThisItem,
+                                    {
+                                        Action: {Value: "Recommend"},
+                                        ActionDate: gblToday,
+                                        Comments: txtEndorsementComment.Text
+                                    }
+                                );
+                                // F7 fires on this modification and opens the
+                                // next stage. Nothing here advances the chain —
+                                // two writers to the same chain is how documents
+                                // end up at two stages at once.
+                                Notify("Recommended. Routing advances automatically.", NotificationType.Success);
+                                ClearCollect(
+                                    colMyEndorsements,
+                                    Filter(eCAF_Routing, CurrentHolder.Email = gblMe.Email, Action.Value = "Pending")
+                                )
+
+                    - btnNotRecommend:
+                        Control: Button
+                        Properties:
+                            Text: ="Not recommend"
+                            # A negative endorsement without a reason is not
+                            # actionable by the next stage or defensible later.
+                            DisplayMode: |
+                                =If(
+                                    IsBlank(txtEndorsementComment.Text),
+                                    DisplayMode.Disabled,
+                                    DisplayMode.Edit
+                                )
+                            OnSelect: |
+                                =Patch(
+                                    eCAF_Routing,
+                                    ThisItem,
+                                    {
+                                        Action: {Value: "NotRecommend"},
+                                        ActionDate: gblToday,
+                                        Comments: txtEndorsementComment.Text
+                                    }
+                                );
+                                Notify("Recorded as not recommended.", NotificationType.Warning);
+                                ClearCollect(
+                                    colMyEndorsements,
+                                    Filter(eCAF_Routing, CurrentHolder.Email = gblMe.Email, Action.Value = "Pending")
+                                )
+
+                    - btnReturnWithoutAction:
+                        Control: Button
+                        Properties:
+                            Text: ="Return without action"
+                            DisplayMode: |
+                                =If(
+                                    IsBlank(txtEndorsementComment.Text),
+                                    DisplayMode.Disabled,
+                                    DisplayMode.Edit
+                                )
+                            OnSelect: |
+                                =Patch(
+                                    eCAF_Routing,
+                                    ThisItem,
+                                    {
+                                        Action: {Value: "ReturnWithoutAction"},
+                                        ActionDate: gblToday,
+                                        Comments: txtEndorsementComment.Text
+                                    }
+                                );
+                                // F7 sends it back to MSP rather than onward.
+                                Notify("Returned to MSP.", NotificationType.Warning);
+                                ClearCollect(
+                                    colMyEndorsements,
+                                    Filter(eCAF_Routing, CurrentHolder.Email = gblMe.Email, Action.Value = "Pending")
+                                )
+
+            - cmpFooter:
+                Control: CanvasComponent
+                ComponentName: cmpCUIFooter
+                Properties:
+                    X: =0
+                    Y: =Parent.Height - 40
+                    Width: =Parent.Width

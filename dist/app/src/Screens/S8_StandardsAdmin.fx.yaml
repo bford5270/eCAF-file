@@ -1,0 +1,282 @@
+# S8_StandardsAdmin — CRUD over the standards library.
+#
+# This screen is how a standard gets added without touching the app. Adding a row
+# here makes the standard appear on the next matching review, badged DRAFT, with
+# no republish. If that ever stops being true, the standards engine is broken —
+# see docs/standards-mapping-engine.md.
+#
+# Retire, never delete: RETIRED standards keep historical eCAF_ReviewResponses
+# lookups resolvable. A deleted standard turns every past response into a dangling
+# reference and quietly changes historical rates.
+
+Screens:
+    S8_StandardsAdmin:
+        Properties:
+            Fill: =RGBA(245, 246, 248, 1)
+            OnVisible: |
+                =Set(varStandard, Coalesce(ctxStandard, Blank()));
+                Set(varStdError, "")
+
+        Children:
+            - lblTitle:
+                Control: Label
+                Properties:
+                    Text: ="Standards Library"
+                    Size: =24
+                    FontWeight: =FontWeight.Bold
+                    X: =40
+                    Y: =24
+
+            - ddFilterStatus:
+                Control: Dropdown
+                Properties:
+                    X: =40
+                    Y: =80
+                    Items: =["All", "ACTIVE", "DRAFT-VALIDATE", "RETIRED"]
+                    Default: ="All"
+
+            - galStandards:
+                Control: Gallery
+                Variant: Vertical
+                Properties:
+                    X: =40
+                    Y: =130
+                    Width: =620
+                    Height: =620
+                    Items: |
+                        =SortByColumns(
+                            Filter(
+                                eCAF_Standards,
+                                ddFilterStatus.Selected.Value = "All"
+                                    Or Status.Value = ddFilterStatus.Selected.Value
+                            ),
+                            "Title",
+                            SortOrder.Ascending
+                        )
+                Children:
+                    - lblStdRow:
+                        Control: Label
+                        Properties:
+                            Text: =ThisItem.Title & "  ·  " & ThisItem.Specialty.Value
+                    - lblStdStatus:
+                        Control: Label
+                        Properties:
+                            Text: =ThisItem.Status.Value
+                            Color: |
+                                =Switch(
+                                    ThisItem.Status.Value,
+                                    "ACTIVE", RGBA(0, 120, 60, 1),
+                                    "DRAFT-VALIDATE", RGBA(140, 90, 0, 1),
+                                    RGBA(120, 125, 135, 1)
+                                )
+                    - btnSelectStd:
+                        Control: Button
+                        Properties:
+                            Text: ="Edit"
+                            OnSelect: =Set(varStandard, ThisItem)
+
+            # ---------------------------------------------------------------
+            # Editor
+            # ---------------------------------------------------------------
+            - txtStdId:
+                Control: TextInput
+                Properties:
+                    X: =700
+                    Y: =130
+                    Width: =200
+                    Default: =varStandard.Title
+                    HintText: ="e.g. PC-GMO-004"
+
+            - txtStdText:
+                Control: TextInput
+                Properties:
+                    Mode: =TextMode.MultiLine
+                    X: =700
+                    Y: =180
+                    Width: =540
+                    Height: =90
+                    Default: =varStandard.StandardText
+
+            - ddStdCategory:
+                Control: Dropdown
+                Properties:
+                    X: =700
+                    Y: =290
+                    Items: =Choices(eCAF_Standards.Category)
+                    Default: =varStandard.Category.Value
+
+            - ddStdSpecialty:
+                Control: Dropdown
+                Properties:
+                    X: =950
+                    Y: =290
+                    Items: =Choices(eCAF_Standards.Specialty)
+                    Default: =varStandard.Specialty.Value
+
+            - txtSourceCitation:
+                Control: TextInput
+                Properties:
+                    X: =700
+                    Y: =350
+                    Width: =540
+                    Default: =varStandard.SourceCitation
+                    # DHA-sourced standards carry their citation verbatim — hard
+                    # rule. A paraphrased citation cannot be checked against the
+                    # source during an inspection.
+                    HintText: ="Verbatim document + section for DHA-sourced; 'Local SOP' or 'CL-validated' otherwise"
+
+            - txtMapsTo:
+                Control: TextInput
+                Properties:
+                    X: =700
+                    Y: =410
+                    Width: =540
+                    Default: =varStandard.MapsTo
+                    HintText: ="Semicolon list, e.g. FPPE-3I;OPPE-IIIF"
+                    OnChange: |
+                        =// 455-I11:<element> is checked against the element keys
+                        // in fixed-instrument.json rather than the flat token
+                        // list, so renaming an element there surfaces here.
+                        ClearCollect(
+                            colBadTokens,
+                            Filter(
+                                ForAll(Split(Self.Text, ";"), {Value: Trim(Value)}),
+                                !IsBlank(Value)
+                                    And !(Value in colValidTokens)
+                                    And !(
+                                        StartsWith(Value, "455-I11:")
+                                            And Mid(Value, 9) in colItem11Elements.ElementKey
+                                    )
+                            )
+                        )
+
+            - lblMapsToValidation:
+                Control: Label
+                Properties:
+                    # Closed vocabulary from standards-schema.json. A typo here
+                    # silently drops the standard out of every document it should
+                    # have fed, and nobody notices until an inspection.
+                    # tools/lint_hard_rules.py enforces the same list at build time.
+                    Visible: =!IsBlank(txtMapsTo.Text) And CountRows(colBadTokens) > 0
+                    Text: |
+                        ="Unknown token(s): " & Concat(colBadTokens, Value, ", ")
+                            & ". Valid tokens are listed in standards-schema.json."
+                    Color: =RGBA(168, 0, 0, 1)
+                    Size: =10
+                    X: =700
+                    Y: =450
+                    Width: =540
+
+            - btnSaveStandard:
+                Control: Button
+                Properties:
+                    X: =700
+                    Y: =490
+                    Text: ="Save as DRAFT-VALIDATE"
+                    DisplayMode: |
+                        =If(
+                            IsBlank(txtStdId.Text) Or IsBlank(txtStdText.Text)
+                                Or CountRows(colBadTokens) > 0,
+                            DisplayMode.Disabled,
+                            DisplayMode.Edit
+                        )
+                    # New and edited standards always land in DRAFT-VALIDATE.
+                    # A Clinical Leader promotes to ACTIVE; the author cannot
+                    # self-validate, which is the whole point of the state.
+                    OnSelect: |
+                        =IfError(
+                            Patch(
+                                eCAF_Standards,
+                                Coalesce(varStandard, Defaults(eCAF_Standards)),
+                                {
+                                    Title: txtStdId.Text,
+                                    StandardText: txtStdText.Text,
+                                    Category: ddStdCategory.Selected,
+                                    Specialty: ddStdSpecialty.Selected,
+                                    SourceCitation: txtSourceCitation.Text,
+                                    MapsTo: txtMapsTo.Text,
+                                    Status: {Value: "DRAFT-VALIDATE"},
+                                    ValidatedBy: Blank(),
+                                    ValidatedDate: Blank()
+                                }
+                            ),
+                            Set(varStdError, "Not saved. " & FirstError.Message)
+                        )
+
+            # ---------------------------------------------------------------
+            # Clinical Leader validation
+            # ---------------------------------------------------------------
+            - btnValidate:
+                Control: Button
+                Properties:
+                    X: =950
+                    Y: =490
+                    Text: ="Validate → ACTIVE"
+                    # Clinical Leader only, and only for their own specialty or a
+                    # Universal standard. An EM leader validating a PT standard is
+                    # not a peer judgement.
+                    Visible: |
+                        =nfIsCL
+                            And varStandard.Status.Value = "DRAFT-VALIDATE"
+                            And varStandard.Specialty.Value in ["Universal", gblMySpecialty]
+                    OnSelect: |
+                        =IfError(
+                            Patch(
+                                eCAF_Standards,
+                                varStandard,
+                                {
+                                    Status: {Value: "ACTIVE"},
+                                    ValidatedBy: gblMe,
+                                    ValidatedDate: gblToday
+                                }
+                            ),
+                            Set(varStdError, "Not validated. " & FirstError.Message)
+                        );
+                        Notify(
+                            varStandard.Title & " is now ACTIVE and will appear in generated documents.",
+                            NotificationType.Success
+                        )
+
+            - btnRetire:
+                Control: Button
+                Properties:
+                    X: =700
+                    Y: =540
+                    Text: ="Retire"
+                    Visible: =nfIsMSPorCL And varStandard.Status.Value <> "RETIRED"
+                    OnSelect: |
+                        =Patch(eCAF_Standards, varStandard, {Status: {Value: "RETIRED"}});
+                        Notify(
+                            "Retired. Historical responses are preserved and past rates are unchanged.",
+                            NotificationType.Success
+                        )
+
+            - lblNoDelete:
+                Control: Label
+                Properties:
+                    Text: |
+                        ="Standards are retired, never deleted — deleting one would orphan every
+                        historical response that referenced it and silently change past rates."
+                    Size: =9
+                    Color: =RGBA(120, 125, 135, 1)
+                    X: =700
+                    Y: =580
+                    Width: =540
+
+            - lblStdError:
+                Control: Label
+                Properties:
+                    Visible: =!IsBlank(varStdError)
+                    Text: =varStdError
+                    Color: =RGBA(168, 0, 0, 1)
+                    X: =700
+                    Y: =620
+                    Width: =540
+
+            - cmpFooter:
+                Control: CanvasComponent
+                ComponentName: cmpCUIFooter
+                Properties:
+                    X: =0
+                    Y: =Parent.Height - 40
+                    Width: =Parent.Width

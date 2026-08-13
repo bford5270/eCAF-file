@@ -1,0 +1,384 @@
+# S3_CaseIntake — MSP / Clinical Leader create review cases.
+#
+# HARD RULE, enforced here and nowhere else needed: FIN is the ONLY encounter
+# identity field on this form. There is no MRN, no SSN, no DOB, no patient name
+# control on this screen, and none may be added. If a future requirement asks for
+# "just the last four" of anything, that is a schema change requiring a new
+# hard-rule review, not a new text input.
+
+Screens:
+    S3_CaseIntake:
+        Properties:
+            Fill: =RGBA(245, 246, 248, 1)
+
+            OnVisible: |
+                =Set(varIntakeError, "");
+                Set(varCreatePair, false);
+                Reset(txtFIN);
+
+                // CaseID sequence: RC-YYYY-####. Derived from the highest
+                // existing number this year rather than a stored counter, so two
+                // MSPs creating cases at once cannot both read a stale counter.
+                // The uniqueness guarantee is still only as good as the gap
+                // between read and write — see the collision retry in btnCreate.
+                Set(
+                    varNextSeq,
+                    1 + Value(
+                        Coalesce(
+                            Last(
+                                Sort(
+                                    ShowColumns(
+                                        Filter(eCAF_ReviewCases, StartsWith(Title, "RC-" & Year(gblToday) & "-")),
+                                        "Title"
+                                    ),
+                                    Title
+                                )
+                            ).Title,
+                            "RC-" & Year(gblToday) & "-0000"
+                        ) |> Right(_, 4)
+                    )
+                )
+
+        Children:
+
+            - lblTitle:
+                Control: Label
+                Properties:
+                    Text: ="Case Intake"
+                    Size: =24
+                    FontWeight: =FontWeight.Bold
+                    X: =40
+                    Y: =24
+
+            # ---------------------------------------------------------------
+            # Provider
+            # ---------------------------------------------------------------
+            - cboProvider:
+                Control: ComboBox
+                Properties:
+                    X: =40
+                    Y: =90
+                    Width: =420
+                    Items: =Sort(eCAF_Providers, Title)
+                    DisplayFields: =["Title", "Specialty"]
+                    SelectMultiple: =false
+
+            # ---------------------------------------------------------------
+            # FIN — the sole encounter identifier
+            # ---------------------------------------------------------------
+            - lblFINLabel:
+                Control: Label
+                Properties:
+                    Text: ="FIN (encounter identifier)"
+                    X: =40
+                    Y: =150
+
+            - txtFIN:
+                Control: TextInput
+                Properties:
+                    X: =40
+                    Y: =176
+                    Width: =260
+                    MaxLength: =12
+                    Format: =TextFormat.Text
+                    HintText: ="12 characters max"
+
+            - lblFINHelp:
+                Control: Label
+                Properties:
+                    # Said plainly on the form, because the person typing is the
+                    # last control before CUI enters the system.
+                    Text: |
+                        ="FIN only. Do not enter name, MRN, SSN, or date of birth
+                        in this or any other field."
+                    Size: =10
+                    Color: =RGBA(120, 15, 15, 1)
+                    X: =40
+                    Y: =212
+                    Width: =420
+
+            - lblFINValidation:
+                Control: Label
+                Properties:
+                    # Cheap structural check against the commonest paste errors:
+                    # a 9-digit SSN, or an MRN with dashes. Not a substitute for
+                    # the human, just a speed bump in front of the obvious.
+                    Visible: =!IsBlank(txtFIN.Text) And !FINLooksValid(txtFIN.Text)
+                    Text: |
+                        ="That does not look like a FIN. Check the value — it must
+                        not be an SSN, MRN, or any other identifier."
+                    Color: =RGBA(168, 0, 0, 1)
+                    Size: =10
+                    X: =40
+                    Y: =248
+                    Width: =420
+
+            # ---------------------------------------------------------------
+            # Encounter
+            # ---------------------------------------------------------------
+            - dpEncounterDate:
+                Control: DatePicker
+                Properties:
+                    X: =500
+                    Y: =176
+                    DefaultDate: =gblToday
+
+            - ddEncounterType:
+                Control: Dropdown
+                Properties:
+                    X: =500
+                    Y: =240
+                    Items: =Choices(eCAF_ReviewCases.EncounterType)
+
+            - lblTelemedNote:
+                Control: Label
+                Properties:
+                    # Vol 8 Encl 3 para 2.h — distant-site monitoring makes
+                    # telemedicine encounters random-sample eligible, so the
+                    # intake flags it rather than leaving it to be noticed later.
+                    Visible: =ddEncounterType.Selected.Value = "Telemedicine"
+                    Text: ="Telemedicine — eligible for distant-site random sampling (Vol 8)."
+                    Size: =10
+                    X: =500
+                    Y: =276
+                    Width: =420
+
+            - ddReviewPurpose:
+                Control: Dropdown
+                Properties:
+                    X: =500
+                    Y: =310
+                    Items: =Choices(eCAF_ReviewCases.ReviewPurpose)
+
+            - ddReviewType:
+                Control: Dropdown
+                Properties:
+                    X: =500
+                    Y: =374
+                    Items: =Choices(eCAF_ReviewCases.ReviewType)
+                    Default: ="Peer"
+
+            - lblDenominatorNote:
+                Control: Label
+                Properties:
+                    # The MSP is told, at the moment of choosing, what the choice
+                    # costs. This is the single most misunderstood field in the
+                    # predecessor tool.
+                    Text: |
+                        =If(
+                            ddReviewType.Selected.Value in nfDenominatorTypes,
+                            "Counts toward the OPPE review floor and DHA 455 item 11 denominators.",
+                            "Feeds competency aggregates and narrative only. Does NOT count toward
+                             the OPPE floor or 455 item 11 denominators."
+                        )
+                    Size: =10
+                    Color: =RGBA(90, 95, 105, 1)
+                    X: =500
+                    Y: =410
+                    Width: =420
+
+            - ddRequiredSpecialty:
+                Control: Dropdown
+                Properties:
+                    X: =40
+                    Y: =310
+                    Items: =Choices(eCAF_ReviewCases.RequiredReviewerSpecialty)
+                    # Defaults to the provider's own specialty for a Peer review;
+                    # left for the MSP to set on a CrossSpecialty case, because
+                    # guessing which other specialty should look is not the app's
+                    # call.
+                    Default: |
+                        =If(
+                            ddReviewType.Selected.Value = "Peer",
+                            cboProvider.Selected.Specialty.Value,
+                            Blank()
+                        )
+
+            # ---------------------------------------------------------------
+            # Suspense — business days, per CLAUDE.md
+            # ---------------------------------------------------------------
+            - dpSuspense:
+                Control: DatePicker
+                Properties:
+                    X: =40
+                    Y: =374
+                    # AddBusinessDays excludes weekends and the federal holidays
+                    # in colHolidays. The MSP can override; the default is right.
+                    DefaultDate: =AddBusinessDays(gblToday, nfSuspenseBusinessDays)
+
+            - lblSuspenseCalc:
+                Control: Label
+                Properties:
+                    Text: |
+                        =nfSuspenseBusinessDays & " business days from today ("
+                            & Text(AddBusinessDays(gblToday, nfSuspenseBusinessDays), "ddd dd mmm")
+                            & "), weekends and federal holidays excluded"
+                    Size: =10
+                    X: =40
+                    Y: =410
+                    Width: =420
+
+            # ---------------------------------------------------------------
+            # Cross-specialty pair
+            # ---------------------------------------------------------------
+            - tglCreatePair:
+                Control: Toggle
+                Properties:
+                    X: =40
+                    Y: =460
+                    Default: =false
+                    OnChange: =Set(varCreatePair, Self.Value)
+
+            - lblPairHelp:
+                Control: Label
+                Properties:
+                    Text: |
+                        ="Create the cross-specialty twin of this case, linked by
+                        PairedCase. The twin is CrossSpecialty type and does not
+                        count toward the floor or the 455 denominators."
+                    Size: =10
+                    X: =110
+                    Y: =460
+                    Width: =420
+
+            - ddPairSpecialty:
+                Control: Dropdown
+                Properties:
+                    Visible: =varCreatePair
+                    X: =40
+                    Y: =510
+                    Items: =Choices(eCAF_ReviewCases.RequiredReviewerSpecialty)
+
+            # ---------------------------------------------------------------
+            # Create
+            # ---------------------------------------------------------------
+            - btnCreate:
+                Control: Button
+                Properties:
+                    X: =40
+                    Y: =570
+                    Text: ="Create case"
+                    DisplayMode: |
+                        =If(
+                            !IsBlank(cboProvider.Selected)
+                                And FINLooksValid(txtFIN.Text)
+                                And !IsBlank(ddReviewPurpose.Selected)
+                                And !IsBlank(ddReviewType.Selected)
+                                And !IsBlank(ddRequiredSpecialty.Selected),
+                            DisplayMode.Edit,
+                            DisplayMode.Disabled
+                        )
+                    OnSelect: |
+                        =Set(varIntakeError, "");
+
+                        // --- primary case
+                        Set(
+                            varNewCase,
+                            Patch(
+                                eCAF_ReviewCases,
+                                Defaults(eCAF_ReviewCases),
+                                {
+                                    Title: "RC-" & Year(gblToday) & "-" & Right("0000" & varNextSeq, 4),
+                                    Provider: {
+                                        Id: cboProvider.Selected.ID,
+                                        Value: cboProvider.Selected.Title
+                                    },
+                                    FIN: Trim(txtFIN.Text),
+                                    EncounterDate: dpEncounterDate.SelectedDate,
+                                    EncounterType: ddEncounterType.Selected,
+                                    ReviewPurpose: ddReviewPurpose.Selected,
+                                    ReviewType: ddReviewType.Selected,
+                                    RequiredReviewerSpecialty: ddRequiredSpecialty.Selected,
+                                    Suspense: dpSuspense.SelectedDate,
+                                    CaseStatus: {Value: "Assigned"}
+                                    // AssignedReviewer / AssignedDate are set by
+                                    // flow F1, which also stamps item permissions.
+                                    // Setting them here would race F1 and, worse,
+                                    // create a window where the item is readable
+                                    // by the whole list before F1 locks it down.
+                                }
+                            )
+                        );
+
+                        If(
+                            IsError(varNewCase),
+                            Set(varIntakeError, "Case not created. " & FirstError.Message),
+
+                            // --- cross-specialty twin, if requested
+                            If(
+                                varCreatePair,
+                                Set(
+                                    varTwin,
+                                    Patch(
+                                        eCAF_ReviewCases,
+                                        Defaults(eCAF_ReviewCases),
+                                        {
+                                            Title: "RC-" & Year(gblToday) & "-" & Right("0000" & (varNextSeq + 1), 4),
+                                            Provider: {
+                                                Id: cboProvider.Selected.ID,
+                                                Value: cboProvider.Selected.Title
+                                            },
+                                            FIN: Trim(txtFIN.Text),
+                                            EncounterDate: dpEncounterDate.SelectedDate,
+                                            EncounterType: ddEncounterType.Selected,
+                                            ReviewPurpose: ddReviewPurpose.Selected,
+                                            ReviewType: {Value: "CrossSpecialty"},
+                                            RequiredReviewerSpecialty: ddPairSpecialty.Selected,
+                                            Suspense: dpSuspense.SelectedDate,
+                                            CaseStatus: {Value: "Assigned"},
+                                            PairedCase: {Id: varNewCase.ID, Value: varNewCase.Title}
+                                        }
+                                    )
+                                );
+
+                                // Back-link. Two writes are unavoidable:
+                                // SharePoint cannot set a self-referencing lookup
+                                // to an item that does not exist yet.
+                                Patch(
+                                    eCAF_ReviewCases,
+                                    varNewCase,
+                                    {PairedCase: {Id: varTwin.ID, Value: varTwin.Title}}
+                                )
+                            );
+
+                            Notify(
+                                "Created " & varNewCase.Title
+                                    & If(varCreatePair, " and " & varTwin.Title, ""),
+                                NotificationType.Success
+                            );
+                            Reset(txtFIN);
+                            Set(varNextSeq, varNextSeq + If(varCreatePair, 2, 1))
+                        )
+
+            - lblIntakeError:
+                Control: Label
+                Properties:
+                    Visible: =!IsBlank(varIntakeError)
+                    Text: =varIntakeError
+                    Color: =RGBA(168, 0, 0, 1)
+                    X: =40
+                    Y: =620
+                    Width: =600
+
+            # ---------------------------------------------------------------
+            # Bulk mode — N cases for an OPPE cycle
+            # ---------------------------------------------------------------
+            - btnBulkMode:
+                Control: Button
+                Properties:
+                    Visible: =nfIsMSP
+                    X: =240
+                    Y: =570
+                    Text: ="Bulk intake for OPPE cycle"
+                    # Bulk mode reuses this same form for the constant fields and
+                    # takes a FIN per line. It does NOT generate FINs — every FIN
+                    # is typed or pasted by the MSP from the encounter list.
+                    OnSelect: =Set(varBulkMode, true)
+
+            - cmpFooter:
+                Control: CanvasComponent
+                ComponentName: cmpCUIFooter
+                Properties:
+                    X: =0
+                    Y: =Parent.Height - 40
+                    Width: =Parent.Width

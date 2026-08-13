@@ -1,0 +1,395 @@
+# S1_Dashboard — role-aware landing screen.
+#
+# MSP sees everything MEF-wide; Clinical Leader sees the same cards scoped to
+# their department; Reviewer sees only their own queue. Remember this filtering
+# is UX, not a control — a reviewer cannot read another reviewer's case because
+# SharePoint item-level permissions stop them, not because this gallery hides it.
+
+Screens:
+    S1_Dashboard:
+        Properties:
+            Fill: =RGBA(245, 246, 248, 1)
+
+            OnVisible: |
+                =// Cards below read live data sources directly. The only thing
+                // precomputed here is the roster slice the cards iterate, which
+                // is filtered server-side on the indexed Department column.
+                ClearCollect(
+                    colMyProviders,
+                    If(
+                        nfIsCL And !IsBlank(gblMyDepartment),
+                        Filter(eCAF_Providers, Department = gblMyDepartment),
+                        eCAF_Providers
+                    )
+                )
+
+        Children:
+
+            # ---------------------------------------------------------------
+            # Header
+            # ---------------------------------------------------------------
+            - lblScreenTitle:
+                Control: Label
+                Properties:
+                    Text: ="e-CAF Dashboard"
+                    Size: =24
+                    FontWeight: =FontWeight.Bold
+                    X: =40
+                    Y: =24
+
+            - lblRoleChip:
+                Control: Label
+                Properties:
+                    Text: ="Signed in as " & gblMe.FullName & "  ·  " & gblRole
+                    Size: =12
+                    Color: =RGBA(90, 95, 105, 1)
+                    X: =40
+                    Y: =60
+
+            # ---------------------------------------------------------------
+            # Card 1 — open cases by status  (MSP / CL)
+            # ---------------------------------------------------------------
+            - galOpenByStatus:
+                Control: Gallery
+                Variant: Vertical
+                Properties:
+                    Visible: =nfIsMSPorCL
+                    X: =40
+                    Y: =110
+                    Width: =380
+                    Height: =220
+                    # GroupBy over the pre-filtered set. CaseStatus is indexed,
+                    # so the Filter delegates; the grouping is in memory over a
+                    # set already bounded by department.
+                    Items: |
+                        =GroupBy(
+                            Filter(
+                                eCAF_ReviewCases,
+                                CaseStatus <> "Complete",
+                                Provider.Id in colMyProviders.ID
+                            ),
+                            "CaseStatus",
+                            "GroupedCases"
+                        )
+                Children:
+                    - lblStatusName:
+                        Control: Label
+                        Properties:
+                            Text: =ThisItem.CaseStatus
+                    - lblStatusCount:
+                        Control: Label
+                        Properties:
+                            Text: =CountRows(ThisItem.GroupedCases)
+
+            # ---------------------------------------------------------------
+            # Card 2 — overdue  (MSP / CL)
+            # ---------------------------------------------------------------
+            # Uses the same IsOverdue UDF flow F2 mirrors, so the card and the
+            # nightly escalation can never disagree about what "overdue" means.
+            - galOverdue:
+                Control: Gallery
+                Variant: Vertical
+                Properties:
+                    Visible: =nfIsMSPorCL
+                    X: =440
+                    Y: =110
+                    Width: =380
+                    Height: =220
+                    Items: |
+                        =SortByColumns(
+                            Filter(
+                                Filter(
+                                    eCAF_ReviewCases,
+                                    CaseStatus <> "Complete",
+                                    Suspense < gblToday,
+                                    Provider.Id in colMyProviders.ID
+                                ),
+                                IsOverdue(Suspense, CaseStatus)
+                            ),
+                            "Suspense",
+                            SortOrder.Ascending
+                        )
+                Children:
+                    - lblOverdueCase:
+                        Control: Label
+                        Properties:
+                            Text: =ThisItem.Title & "  ·  " & ThisItem.Provider.Value
+                    - lblOverdueBy:
+                        Control: Label
+                        Properties:
+                            Text: |
+                                =BusinessDaysBetween(ThisItem.Suspense, gblToday)
+                                    & " business days past suspense"
+                            Color: =RGBA(168, 0, 0, 1)
+
+            # ---------------------------------------------------------------
+            # Card 3 — OPPE floor tracker  (MSP / CL)
+            # ---------------------------------------------------------------
+            # Peer-type completed reviews only, per the denominator hard rule —
+            # OPPEReviewCount routes through CountsInDenominator, which reads
+            # eCAF_Config. Nothing here hard-codes "Peer".
+            - galOPPEFloor:
+                Control: Gallery
+                Variant: Vertical
+                Properties:
+                    Visible: =nfIsMSPorCL
+                    X: =40
+                    Y: =350
+                    Width: =780
+                    Height: =240
+                    Items: |
+                        =Filter(
+                            colMyProviders,
+                            !IsBlank(OPPEPeriodStart) And OPPEPeriodEnd >= gblToday
+                        )
+                Children:
+                    - lblFloorProvider:
+                        Control: Label
+                        Properties:
+                            Text: =ThisItem.Title & "  ·  " & ThisItem.Specialty
+                    - lblFloorCount:
+                        Control: Label
+                        Properties:
+                            Text: |
+                                =OPPEReviewCount(ThisItem.ID, ThisItem.OPPEPeriodStart, ThisItem.OPPEPeriodEnd)
+                                    & " of " & nfOPPEFloor & " peer reviews"
+                            Color: |
+                                =If(
+                                    OPPEFloorMet(ThisItem.ID, ThisItem.OPPEPeriodStart, ThisItem.OPPEPeriodEnd),
+                                    RGBA(0, 120, 60, 1),
+                                    RGBA(168, 0, 0, 1)
+                                )
+                    - lblCrossSpecialtyNote:
+                        Control: Label
+                        Properties:
+                            # Shown so nobody wonders why the count is lower than
+                            # the number of reviews they know were completed.
+                            Text: |
+                                =With(
+                                    {
+                                        xs: CountRows(
+                                            Filter(
+                                                eCAF_ReviewCases,
+                                                Provider.Id = ThisItem.ID,
+                                                CaseStatus = "Complete",
+                                                ReviewType = "CrossSpecialty",
+                                                EncounterDate >= ThisItem.OPPEPeriodStart,
+                                                EncounterDate <= ThisItem.OPPEPeriodEnd
+                                            )
+                                        )
+                                    },
+                                    If(
+                                        xs > 0,
+                                        "+ " & xs & " cross-specialty (not counted toward the floor)",
+                                        ""
+                                    )
+                                )
+                            Size: =10
+                            Color: =RGBA(120, 125, 135, 1)
+
+            # ---------------------------------------------------------------
+            # Card 4 — 90-day privilege expiration watchlist  (MSP / CL)
+            # ---------------------------------------------------------------
+            - galPrivilegeWatch:
+                Control: Gallery
+                Variant: Vertical
+                Properties:
+                    Visible: =nfIsMSPorCL
+                    X: =860
+                    Y: =110
+                    Width: =380
+                    Height: =240
+                    Items: |
+                        =SortByColumns(
+                            Filter(
+                                colMyProviders,
+                                PrivilegeExpiration <= DateAdd(gblToday, nfPrivilegeWarnDays, TimeUnit.Days)
+                            ),
+                            "PrivilegeExpiration",
+                            SortOrder.Ascending
+                        )
+                Children:
+                    - lblWatchProvider:
+                        Control: Label
+                        Properties:
+                            Text: =ThisItem.Title
+                    - lblStopEWP:
+                        Control: Label
+                        Properties:
+                            # DHA-PM 6025.13 Vol 8. The banner names the decision
+                            # the MSP owes, not just the date.
+                            Text: |
+                                ="Expires " & Text(ThisItem.PrivilegeExpiration, "dd mmm yyyy")
+                                    & " — STOP-EWP / legacy process determination required"
+                            Color: =RGBA(168, 0, 0, 1)
+                            Size: =10
+
+            # ---------------------------------------------------------------
+            # Card 5 — supervised + operational stop-and-resolve  (MSP / CL)
+            # ---------------------------------------------------------------
+            - galStopAndResolve:
+                Control: Gallery
+                Variant: Vertical
+                Properties:
+                    Visible: =nfIsMSPorCL
+                    X: =860
+                    Y: =370
+                    Width: =380
+                    Height: =220
+                    # Mirrors F4. BUMEDNOTE 6000: a provider on supervised
+                    # privileges deployed to an operational platform is a
+                    # stop-and-resolve, not a watch item.
+                    Items: |
+                        =Filter(
+                            colMyProviders,
+                            PrivilegingStatus = "Supervised",
+                            OperationalPlatform = true
+                        )
+                Children:
+                    - lblSarProvider:
+                        Control: Label
+                        Properties:
+                            Text: =ThisItem.Title & " — supervised privileges on operational platform"
+                            Color: =RGBA(168, 0, 0, 1)
+                            FontWeight: =FontWeight.Semibold
+
+            # ---------------------------------------------------------------
+            # Card 6 — DRAFT-VALIDATE standards awaiting sign-off
+            # ---------------------------------------------------------------
+            - galDraftStandards:
+                Control: Gallery
+                Variant: Vertical
+                Properties:
+                    Visible: =nfIsMSPorCL
+                    X: =440
+                    Y: =610
+                    Width: =380
+                    Height: =200
+                    # A Clinical Leader sees only their own specialty's queue;
+                    # MSP sees all, because MSP chases the sign-offs.
+                    Items: |
+                        =Filter(
+                            eCAF_Standards,
+                            Status = "DRAFT-VALIDATE"
+                        )
+                Children:
+                    - lblDraftStd:
+                        Control: Label
+                        Properties:
+                            Text: =ThisItem.Title & " · " & ThisItem.Specialty
+                    - btnGoValidate:
+                        Control: Button
+                        Properties:
+                            Text: ="Review"
+                            OnSelect: =Navigate(S8_StandardsAdmin, ScreenTransition.None, {ctxStandard: ThisItem})
+
+            # ---------------------------------------------------------------
+            # Card 7 — my review queue  (Reviewer)
+            # ---------------------------------------------------------------
+            - galMyQueue:
+                Control: Gallery
+                Variant: Vertical
+                Properties:
+                    Visible: =nfIsReviewer
+                    X: =40
+                    Y: =110
+                    Width: =780
+                    Height: =480
+                    # AssignedReviewer and Suspense are both indexed.
+                    Items: |
+                        =SortByColumns(
+                            Filter(
+                                eCAF_ReviewCases,
+                                AssignedReviewer.Email = gblMe.Email,
+                                CaseStatus <> "Complete"
+                            ),
+                            "Suspense",
+                            SortOrder.Ascending
+                        )
+                Children:
+                    - lblQueueCase:
+                        Control: Label
+                        Properties:
+                            Text: =ThisItem.Title & "  ·  " & ThisItem.ReviewPurpose & "  ·  " & ThisItem.ReviewType
+                    - lblQueueSuspense:
+                        Control: Label
+                        Properties:
+                            Text: ="Due " & Text(ThisItem.Suspense, "dd mmm")
+                            Color: |
+                                =If(
+                                    IsOverdue(ThisItem.Suspense, ThisItem.CaseStatus),
+                                    RGBA(168, 0, 0, 1),
+                                    RGBA(60, 65, 75, 1)
+                                )
+                    - btnOpenReview:
+                        Control: Button
+                        Properties:
+                            Text: ="Open review"
+                            OnSelect: =Navigate(S4_ReviewInstrument, ScreenTransition.None, {ctxCase: ThisItem})
+
+            # ---------------------------------------------------------------
+            # Card 8 — cross-specialty compliance panel  (MSP / CL)
+            # ---------------------------------------------------------------
+            # "Which standards are we collectively worst at." Spans providers
+            # deliberately. Excludes RETIRED so the panel does not fill with
+            # standards nobody is measured against any more.
+            - galCrossSpecialty:
+                Control: Gallery
+                Variant: Vertical
+                Properties:
+                    Visible: =nfIsMSPorCL
+                    X: =40
+                    Y: =610
+                    Width: =380
+                    Height: =200
+                    Items: |
+                        =SortByColumns(
+                            AddColumns(
+                                Filter(eCAF_Standards, Status <> "RETIRED"),
+                                "MetRate", StandardMetRate(ID, ddCompareSpecialty.Selected.Value)
+                            ),
+                            "MetRate",
+                            SortOrder.Ascending
+                        )
+                Children:
+                    - lblStdId:
+                        Control: Label
+                        Properties:
+                            Text: =ThisItem.Title
+                    - lblStdRate:
+                        Control: Label
+                        Properties:
+                            Text: |
+                                =If(
+                                    IsBlank(ThisItem.MetRate),
+                                    "no data",
+                                    Round(ThisItem.MetRate * 100, 0) & "% met"
+                                )
+                    - lblDraftBadge:
+                        Control: Label
+                        Properties:
+                            Visible: =ThisItem.Status = "DRAFT-VALIDATE"
+                            Text: ="DRAFT"
+                            Fill: =RGBA(255, 190, 60, 1)
+                            Size: =9
+
+            - ddCompareSpecialty:
+                Control: Dropdown
+                Properties:
+                    Visible: =nfIsMSPorCL
+                    X: =40
+                    Y: =578
+                    Width: =380
+                    Items: |
+                        =["All", "Universal", "PrimaryCare-GMO", "EmergencyMedicine",
+                          "Orthopedics", "MentalHealth", "PhysicalTherapy"]
+                    Default: ="All"
+
+            # ---------------------------------------------------------------
+            - cmpFooter:
+                Control: CanvasComponent
+                ComponentName: cmpCUIFooter
+                Properties:
+                    X: =0
+                    Y: =Parent.Height - 40
+                    Width: =Parent.Width

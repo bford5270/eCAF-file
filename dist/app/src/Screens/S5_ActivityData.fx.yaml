@@ -1,0 +1,206 @@
+# S5_ActivityData — MSP enters the per-provider, per-period activity volumes that
+# the OPPE and FPPE templates need but no review produces (encounter counts,
+# procedure counts, % incomplete notes, days unavailable).
+#
+# Editable grid, one row per provider for the selected period. Saved per row, not
+# per grid, so a failed save loses one row and says which.
+
+Screens:
+    S5_ActivityData:
+        Properties:
+            Fill: =RGBA(245, 246, 248, 1)
+            OnVisible: |
+                =Set(varPeriodStart, Date(Year(gblToday), 1, 1));
+                Set(varPeriodEnd, Date(Year(gblToday), 12, 31));
+                Select(btnLoadPeriod)
+
+        Children:
+            - lblTitle:
+                Control: Label
+                Properties:
+                    Text: ="Activity Data"
+                    Size: =24
+                    FontWeight: =FontWeight.Bold
+                    X: =40
+                    Y: =24
+
+            - dpPeriodStart:
+                Control: DatePicker
+                Properties:
+                    X: =40
+                    Y: =80
+                    DefaultDate: =varPeriodStart
+
+            - dpPeriodEnd:
+                Control: DatePicker
+                Properties:
+                    X: =230
+                    Y: =80
+                    DefaultDate: =varPeriodEnd
+
+            - btnLoadPeriod:
+                Control: Button
+                Properties:
+                    X: =420
+                    Y: =80
+                    Text: ="Load period"
+                    # Left-joins the roster onto whatever activity rows exist, so
+                    # a provider with no row yet appears with blanks rather than
+                    # being invisible. A missing provider reads as "nothing to
+                    # enter", which is how periods end up half-populated.
+                    OnSelect: |
+                        =ClearCollect(
+                            colActivityGrid,
+                            ForAll(
+                                eCAF_Providers As p,
+                                With(
+                                    {
+                                        existing: LookUp(
+                                            eCAF_ActivityData,
+                                            Provider.Id = p.ID
+                                                And PeriodStart = dpPeriodStart.SelectedDate
+                                                And PeriodEnd = dpPeriodEnd.SelectedDate
+                                        )
+                                    },
+                                    {
+                                        ProviderId: p.ID,
+                                        ProviderName: p.Title,
+                                        Specialty: p.Specialty.Value,
+                                        RecordId: Coalesce(existing.ID, 0),
+                                        Admissions: existing.Admissions,
+                                        OutpatientEncounters: existing.OutpatientEncounters,
+                                        SurgicalProcedures: existing.SurgicalProcedures,
+                                        InvasiveProcedures: existing.InvasiveProcedures,
+                                        NoninvasiveProcedures: existing.NoninvasiveProcedures,
+                                        AdverseEvents: existing.AdverseEvents,
+                                        PctDirectPatientCare: existing.PctDirectPatientCare,
+                                        PctIncompleteNotesOver3BD: existing.PctIncompleteNotesOver3BD,
+                                        DaysUnavailable: existing.DaysUnavailable,
+                                        RecordReviewsCompleted: existing.RecordReviewsCompleted,
+                                        RecordReviewsDeficient: existing.RecordReviewsDeficient
+                                    }
+                                )
+                            )
+                        )
+
+            - galActivity:
+                Control: Gallery
+                Variant: Vertical
+                Properties:
+                    X: =40
+                    Y: =130
+                    Width: =1200
+                    Height: =600
+                    Items: =colActivityGrid
+                Children:
+                    - lblGridProvider:
+                        Control: Label
+                        Properties:
+                            Text: =ThisItem.ProviderName & "  ·  " & ThisItem.Specialty
+                            Width: =300
+
+                    - txtOutpatient:
+                        Control: TextInput
+                        Properties:
+                            Format: =TextFormat.Number
+                            Default: =ThisItem.OutpatientEncounters
+                            Width: =110
+                            OnChange: |
+                                =Patch(
+                                    colActivityGrid,
+                                    ThisItem,
+                                    {OutpatientEncounters: Value(Self.Text)}
+                                )
+
+                    - txtPctIncomplete:
+                        Control: TextInput
+                        Properties:
+                            # Feeds FPPE 3.I / OPPE III.F. "> 3 business days" —
+                            # the MSP computes it from the EHR report; the app
+                            # does not have encounter-level note timestamps and
+                            # must not appear to.
+                            Format: =TextFormat.Number
+                            Default: =ThisItem.PctIncompleteNotesOver3BD
+                            Width: =110
+                            OnChange: |
+                                =Patch(
+                                    colActivityGrid,
+                                    ThisItem,
+                                    {PctIncompleteNotesOver3BD: Value(Self.Text)}
+                                )
+
+                    - txtReviewsCompleted:
+                        Control: TextInput
+                        Properties:
+                            Format: =TextFormat.Number
+                            Default: =ThisItem.RecordReviewsCompleted
+                            Width: =110
+                            OnChange: |
+                                =Patch(colActivityGrid, ThisItem, {RecordReviewsCompleted: Value(Self.Text)})
+
+                    - txtReviewsDeficient:
+                        Control: TextInput
+                        Properties:
+                            Format: =TextFormat.Number
+                            Default: =ThisItem.RecordReviewsDeficient
+                            Width: =110
+                            OnChange: |
+                                =Patch(colActivityGrid, ThisItem, {RecordReviewsDeficient: Value(Self.Text)})
+
+                    - lblRowValidation:
+                        Control: Label
+                        Properties:
+                            # Deficient cannot exceed completed. Caught at entry,
+                            # because it surfaces later as a ratio above 100% on
+                            # a signed document.
+                            Visible: |
+                                =ThisItem.RecordReviewsDeficient > ThisItem.RecordReviewsCompleted
+                            Text: ="Deficient exceeds completed"
+                            Color: =RGBA(168, 0, 0, 1)
+                            Size: =9
+
+                    - btnSaveRow:
+                        Control: Button
+                        Properties:
+                            Text: ="Save"
+                            DisplayMode: |
+                                =If(
+                                    ThisItem.RecordReviewsDeficient > ThisItem.RecordReviewsCompleted,
+                                    DisplayMode.Disabled,
+                                    DisplayMode.Edit
+                                )
+                            OnSelect: |
+                                =IfError(
+                                    Patch(
+                                        eCAF_ActivityData,
+                                        If(
+                                            ThisItem.RecordId = 0,
+                                            Defaults(eCAF_ActivityData),
+                                            LookUp(eCAF_ActivityData, ID = ThisItem.RecordId)
+                                        ),
+                                        {
+                                            Title: "ACT-" & ThisItem.ProviderId & "-"
+                                                & Text(dpPeriodStart.SelectedDate, "yyyymmdd"),
+                                            Provider: {Id: ThisItem.ProviderId, Value: ThisItem.ProviderName},
+                                            PeriodStart: dpPeriodStart.SelectedDate,
+                                            PeriodEnd: dpPeriodEnd.SelectedDate,
+                                            OutpatientEncounters: ThisItem.OutpatientEncounters,
+                                            PctIncompleteNotesOver3BD: ThisItem.PctIncompleteNotesOver3BD,
+                                            RecordReviewsCompleted: ThisItem.RecordReviewsCompleted,
+                                            RecordReviewsDeficient: ThisItem.RecordReviewsDeficient
+                                        }
+                                    ),
+                                    Notify(
+                                        "Row not saved for " & ThisItem.ProviderName
+                                            & " — " & FirstError.Message,
+                                        NotificationType.Error
+                                    )
+                                )
+
+            - cmpFooter:
+                Control: CanvasComponent
+                ComponentName: cmpCUIFooter
+                Properties:
+                    X: =0
+                    Y: =Parent.Height - 40
+                    Width: =Parent.Width
