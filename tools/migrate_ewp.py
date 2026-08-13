@@ -159,6 +159,21 @@ def cmd_inspect(path):
     return 0
 
 
+def csv_safe(value):
+    """Neutralise spreadsheet formula injection.
+
+    docs/dry-run.md tells the operator to open these files and reconcile them
+    against the HTML tool, and the reconciliation workflow makes opening them in
+    Excel the expected next step. Values here come from the predecessor export —
+    review comments and provider names that any reviewer could once type — so a
+    cell beginning =, +, -, @, tab or CR is a formula or DDE payload waiting for
+    that double-click. Prefixing a single quote makes Excel treat it as text; the
+    value is unchanged for SharePoint import, which does not evaluate formulas.
+    """
+    s = "" if value is None else str(value)
+    return "'" + s if s[:1] in ("=", "+", "-", "@", "\t", "\r") else s
+
+
 def resolve(record, candidates):
     """First candidate key present in the record, case-insensitively."""
     lowered = {k.lower(): k for k in record}
@@ -217,7 +232,7 @@ def cmd_migrate(path, outdir):
                         # Never guess. An unmapped result becomes blank and is
                         # reported, because a wrong MET is worse than a gap.
                         val = ""
-                row[col] = "" if val is None else val
+                row[col] = csv_safe(val)
             out_rows.append(row)
 
         p = os.path.join(outdir, f"migrated_{entity}.csv")

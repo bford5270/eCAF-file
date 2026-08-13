@@ -270,13 +270,27 @@ Create these five SharePoint groups before provisioning any list:
 Baseline assignment (tighten per tenant SOP; this is the least-privilege starting
 point, not a finished authorization):
 
-| Group | Site | Providers | ReviewCases | Responses/Summaries | Standards | Config | Documents |
-|---|---|---|---|---|---|---|---|
-| eCAF-MSP | Read | Contribute | Contribute | Contribute | Contribute | Contribute | Contribute |
-| eCAF-ClinicalLeaders | Read | Read | Contribute | Read | Contribute | Read | Contribute |
-| eCAF-Reviewers | Read | Read | *item-level only* | Contribute | Read | Read | None |
-| eCAF-Preceptors | Read | Read | *item-level only* | Read | Read | Read | Contribute |
-| eCAF-Providers | Read | None | None | None | Read | Read | *own folder only* |
+| Group | Site | Providers | ReviewCases | Responses/Summaries | Standards | Config | RoleMap | Documents |
+|---|---|---|---|---|---|---|---|---|
+| eCAF-MSP | Read | Contribute | Contribute | Contribute | Contribute | Contribute | Contribute | Contribute |
+| eCAF-ClinicalLeaders | Read | Read | Contribute | Read | Contribute | Read | Read | Contribute |
+| eCAF-Reviewers | Read | Read | *item-level only* | Contribute | Read | Read | Read | None |
+| eCAF-Preceptors | Read | Read | *item-level only* | Read | Read | Read | Read | Contribute |
+| eCAF-Providers | Read | None | None | None | Read | Read | Read | *own folder only* |
+
+**`eCAF_RoleMap` and `eCAF_Config` are MSP-write / everyone-read, and that is not
+optional.** Both are read at app start and both change behaviour for every user:
+
+- Write access to `eCAF_RoleMap` lets a user set their own `RoleName` to `MSP`.
+  That alone only buys them a different menu — SharePoint still denies every read
+  they are not entitled to, which is why the boundary is the group permissions and
+  not the app. But it also removes the one honest record of who was granted what,
+  so the quarterly F8 access review stops meaning anything.
+- Write access to `eCAF_Config` lets a user set `OPPEReviewFloor` to `1`, at which
+  point every provider in the MEF reads as having met the review floor, on screen
+  and on generated documents. That is a credentialing-integrity control, not a
+  preference. Leave versioning on so a change is attributable, and require the
+  `AuthorityRef` column to name the committee minute that authorised it.
 
 ## Broken inheritance
 

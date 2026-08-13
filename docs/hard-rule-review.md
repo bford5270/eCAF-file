@@ -59,3 +59,75 @@ corrected too.
 through the sample data, the review screen, the aggregation, and the .docx
 templates. But it must be done by someone holding the actual forms, before any
 real review is entered.
+
+---
+
+# Security review
+
+Findings from the security pass over the completed build. All three are fixed on
+this branch; each now has a lint rule so it cannot regress silently.
+
+## SR-1 · HIGH · Document injection via unescaped free text — `dist/app/src/App.fx.yaml`
+
+`BuildDocumentHtml` concatenated user-typed values straight into generated HTML
+with no escaping: provider names (typed in S3) and `StandardText` / `Title`
+(typed in S8 by any MSP or Clinical Leader). That HTML has two sinks — the
+`HtmlViewer` control on S6, and the `.doc` file written into `eCAF_Documents`.
+
+The exploitable consequence is not classic XSS; it is **document forgery**. A
+user who can edit a standard could close the open `<table>` and inject rows —
+a fabricated overall rating, a fabricated endorsement, an altered met-rate — into
+a document that is filed in a provider's credentialing record and read by a
+credentials committee. It renders as legitimate generated content because it is
+inside the generated document.
+
+**Fixed:** added an `EncodeHtml` UDF and applied it to every free-text
+interpolation. Encoding happens at the sink (`DocHtmlHead` encodes its own
+argument) rather than by a caller-side convention, because a "caller encodes"
+contract survives exactly until the second caller. Ampersand is substituted
+first so the entities produced afterwards are not double-encoded.
+Lint: `rule_html_generation_is_encoded`.
+
+## SR-2 · MEDIUM · `eCAF_RoleMap` and `eCAF_Config` had no permission baseline — `dist/lists/provisioning-runbook.md`
+
+Both lists were added by this build and both are read at app start, but the
+runbook's baseline permission table predated them and never assigned them. An
+operator following the table would leave them at the site default.
+
+- Write access to `eCAF_RoleMap` lets a user set their own role to `MSP`. Because
+  the real boundary is SharePoint permissions, that buys a different menu and not
+  data — but it destroys the integrity of the quarterly F8 access review, which is
+  the control that is supposed to catch exactly this.
+- Write access to `eCAF_Config` lets a user set `OPPEReviewFloor` to `1`, after
+  which every provider in the MEF reads as having met the review floor, on screen
+  and on every generated document. That is a credentialing-integrity control
+  wearing the costume of a preference.
+
+**Fixed:** both added to the baseline table as MSP-write / everyone-read, with
+the reasoning stated inline so the next person to widen them sees the cost.
+
+## SR-3 · MEDIUM · Spreadsheet formula injection in migration output — `tools/migrate_ewp.py`
+
+`--migrate` wrote predecessor values into CSV unmodified, and `docs/dry-run.md`
+instructs the operator to open those files and reconcile them — which in practice
+means Excel. Values originate as review comments and provider names in the old
+HTML tool, typed by any reviewer, so a cell beginning `=`, `+`, `-`, or `@` is a
+formula or DDE payload waiting for the double-click that the workflow requires.
+
+**Fixed:** `csv_safe()` prefixes those values with a single quote. SharePoint
+import does not evaluate formulas, so the imported value is unaffected.
+Lint: `rule_migration_csv_is_neutralised`.
+
+## Considered and not filed
+
+- **Filename construction in S6** (`Name:` built from the provider's title).
+  SharePoint rejects `/ \ : * ? " < > |` in item names, so the Patch errors
+  rather than traversing. Defence-in-depth only; not filed.
+- **Reviewer reading another reviewer's case.** Not a code finding — this is the
+  § 1102 boundary and it is SharePoint's to enforce. Gated in `docs/dry-run.md`
+  §1, which tests it by direct item URL rather than through the app, precisely
+  because the app's own filtering proves nothing.
+- **`ParseJSON` on `Item11Elements` / `CompetencyDomains`.** Written only by S4's
+  own serialiser and by the generator; Power Fx `ParseJSON` does not evaluate.
+- **F1's mail actions.** Already link-only by design; no case content in body or
+  subject.

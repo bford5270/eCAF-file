@@ -368,6 +368,27 @@ App:
         // here, not added by a later step — a generated file leaves the app and
         // must carry its marking with it.
 
+        // Every free-text value interpolated into the generated HTML goes
+        // through this first. Provider names and standard text are typed by
+        // users (S3, S8) and land in a document that goes into a credentialing
+        // file and in front of a credentials committee — unescaped markup there
+        // is document forgery, not a cosmetic bug. Ampersand must be replaced
+        // first or it double-encodes the entities produced after it.
+        EncodeHtml(s: Text): Text =
+            Substitute(
+                Substitute(
+                    Substitute(
+                        Substitute(
+                            Substitute(s, "&", "&amp;"),
+                            "<", "&lt;"
+                        ),
+                        ">", "&gt;"
+                    ),
+                    """", "&quot;"
+                ),
+                "'", "&#39;"
+            );
+
         DocHtmlHead(docTitle: Text): Text =
             "<html xmlns:w=""urn:schemas-microsoft-com:office:word""><head><meta charset=""utf-8"">"
             & "<style>"
@@ -380,7 +401,9 @@ App:
             & ".blankbox { border: 1px solid #666; height: 28pt; }"
             & "</style></head><body>"
             & "<div class=""cui"">" & nfCUIBanner & "</div>"
-            & "<h2 style=""text-align:center"">" & docTitle & "</h2>";
+            // Encoded here, at the sink, rather than relying on callers to do it —
+            // a "caller encodes" contract survives exactly until the second caller.
+            & "<h2 style=""text-align:center"">" & EncodeHtml(docTitle) & "</h2>";
 
         DocHtmlFoot(): Text =
             "<br><div class=""cui"">" & nfCUIBanner & "</div>"
@@ -409,11 +432,11 @@ App:
                 DocHtmlHead(docType & " — " & prov.Title)
 
                 & "<table>"
-                & "<tr><td><b>Provider</b></td><td>" & prov.Title & "</td>"
-                & "<td><b>Specialty</b></td><td>" & prov.Specialty.Value & "</td></tr>"
+                & "<tr><td><b>Provider</b></td><td>" & EncodeHtml(prov.Title) & "</td>"
+                & "<td><b>Specialty</b></td><td>" & EncodeHtml(prov.Specialty.Value) & "</td></tr>"
                 & "<tr><td><b>Period</b></td><td>" & Text(periodStart, "dd mmm yyyy")
                     & " – " & Text(periodEnd, "dd mmm yyyy") & "</td>"
-                & "<td><b>Privileging status</b></td><td>" & prov.PrivilegingStatus.Value & "</td></tr>"
+                & "<td><b>Privileging status</b></td><td>" & EncodeHtml(prov.PrivilegingStatus.Value) & "</td></tr>"
                 & "</table>"
 
                 // Qualifying-review count, stated plainly, including when short.
@@ -432,7 +455,7 @@ App:
                 & "<h3>Element results</h3><table><tr><th>Element</th><th>Result</th></tr>"
                 & Concat(
                     colItem11Elements,
-                    "<tr><td>" & ElementLabel & "</td><td>"
+                    "<tr><td>" & EncodeHtml(ElementLabel) & "</td><td>"
                         & With(
                             {v: Item11Display(providerId, periodStart, periodEnd, ElementKey)},
                             If(
@@ -453,7 +476,7 @@ App:
                         Status = "ACTIVE",
                         Specialty.Value in ["Universal", prov.Specialty.Value]
                     ),
-                    "<tr><td>" & Title & "</td><td>" & StandardText & "</td><td>"
+                    "<tr><td>" & EncodeHtml(Title) & "</td><td>" & EncodeHtml(StandardText) & "</td><td>"
                         & With(
                             {r: StandardMetRate(ID, "All")},
                             If(

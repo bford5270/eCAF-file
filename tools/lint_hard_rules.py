@@ -320,6 +320,45 @@ def rule_indexes_declared():
             fail("indexes", f"{lst}.{col} is filtered on but not marked indexed")
 
 
+def rule_html_generation_is_encoded():
+    check("Free text interpolated into generated HTML is HTML-encoded")
+    p = os.path.join(ROOT, "dist", "app", "src", "App.fx.yaml")
+    with open(p, encoding="utf-8") as fh:
+        lines = fh.readlines()
+
+    if not any("EncodeHtml(s: Text)" in l for l in lines):
+        fail("html-encoding", "App.fx.yaml defines no EncodeHtml UDF")
+        return
+
+    # Free-text values that reach the generated .doc and the S6 HtmlViewer.
+    # Provider names (S3) and standard text (S8) are typed by users, and the
+    # output is a document that goes into a credentialing file.
+    free_text = ["StandardText", "prov.Title", "ElementLabel", "docTitle"]
+    for i, line in enumerate(lines, 1):
+        if line.lstrip().startswith(("//", "#")):
+            continue
+        # Only lines that are actually building HTML.
+        if '"<' not in line:
+            continue
+        for field in free_text:
+            if re.search(rf"&\s*{re.escape(field)}\s*&", line) and "EncodeHtml" not in line:
+                fail(
+                    "html-encoding",
+                    f"App.fx.yaml:{i} interpolates {field} into HTML unencoded",
+                )
+
+
+def rule_migration_csv_is_neutralised():
+    check("Migration output neutralises spreadsheet formula injection")
+    p = os.path.join(ROOT, "tools", "migrate_ewp.py")
+    with open(p, encoding="utf-8") as fh:
+        src = fh.read()
+    if "def csv_safe(" not in src:
+        fail("csv-injection", "migrate_ewp.py has no csv_safe neutraliser")
+    elif "row[col] = csv_safe(" not in src:
+        fail("csv-injection", "migrate_ewp.py writes rows without passing through csv_safe")
+
+
 def main():
     print("Hard-rule review (CLAUDE.md)\n")
     for fn in (
@@ -333,6 +372,8 @@ def main():
         rule_sample_data_is_fake,
         rule_csv_matches_schema,
         rule_indexes_declared,
+        rule_html_generation_is_encoded,
+        rule_migration_csv_is_neutralised,
     ):
         fn()
 
