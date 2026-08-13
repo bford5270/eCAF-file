@@ -183,15 +183,20 @@ Screens:
                     X: =40
                     Y: =310
                     Items: =Choices(eCAF_ReviewCases.RequiredReviewerSpecialty)
-                    # Defaults to the provider's own specialty for a Peer review;
-                    # left for the MSP to set on a CrossSpecialty case, because
-                    # guessing which other specialty should look is not the app's
-                    # call.
+                    # Pre-fills the provider's own specialty, and deliberately
+                    # leaves it blank on a cross-specialty case — guessing which
+                    # other specialty should look is not the app's call.
+                    #
+                    # Phrased as "unless CrossSpecialty" rather than "if Peer" on
+                    # purpose: this is a UI convenience about which specialty to
+                    # pre-fill, and must not read as a second, parallel copy of
+                    # the denominator rule. The denominator rule lives in exactly
+                    # one place, CountsInDenominator, and reads eCAF_Config.
                     Default: |
                         =If(
-                            ddReviewType.Selected.Value = "Peer",
-                            cboProvider.Selected.Specialty.Value,
-                            Blank()
+                            ddReviewType.Selected.Value = "CrossSpecialty",
+                            Blank(),
+                            cboProvider.Selected.Specialty.Value
                         )
 
             # ---------------------------------------------------------------
