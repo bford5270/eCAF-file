@@ -1,0 +1,8 @@
+﻿Title,ConfigValue,Description,LastChangedBy,AuthorityRef
+DenominatorReviewTypes,Peer,Semicolon list of ReviewType values that count toward the OPPE review floor and DHA 455 item 11 denominators. Credentials-committee reversible: add CrossSpecialty here to include cross-specialty reviews. No app change required.,sample.msp@test.invalid,SAMPLE - replace with committee minute reference
+OPPEReviewFloor,10,Minimum completed qualifying reviews per OPPE period.,sample.msp@test.invalid,SAMPLE - replace with committee minute reference
+DefaultSuspenseBusinessDays,10,Business days from AssignedDate to Suspense at intake.,sample.msp@test.invalid,SAMPLE - replace with committee minute reference
+OverdueGraceBusinessDays,2,Business days past Suspense before F2 sets CaseStatus=Overdue.,sample.msp@test.invalid,SAMPLE - replace with committee minute reference
+PrivilegeExpiryWarningDays,90,Calendar days ahead of PrivilegeExpiration that F3 raises the STOP-EWP / legacy process determination alert (DHA-PM 6025.13 Vol 8).,sample.msp@test.invalid,SAMPLE - replace with committee minute reference
+DraftStandardsInDocuments,No,"DRAFT-VALIDATE standards are excluded from generated documents. Changing this to Yes contradicts a CLAUDE.md hard rule and the app ignores it; the key exists so the intent is auditable, not settable.",sample.msp@test.invalid,CLAUDE.md hard rule - not operator-settable
+CUIBanner,CUI // Medical Quality Assurance Program document protected pursuant to 10 U.S.C. § 1102,Rendered in the footer of every screen and every generated document. Do not shorten.,sample.msp@test.invalid,CLAUDE.md hard rule

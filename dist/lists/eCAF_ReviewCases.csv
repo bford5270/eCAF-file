@@ -1,0 +1,4 @@
+﻿Title,Provider,FIN,EncounterDate,EncounterType,ReviewPurpose,ReviewType,RequiredReviewerSpecialty,AssignedReviewer,AssignedDate,Suspense,CaseStatus,PairedCase
+RC-2026-0001,"PROVIDER, SAMPLE A.",TEST0000001,2026-07-06,Outpatient,OPPE,Peer,PrimaryCare-GMO,sample.reviewer1@test.invalid,2026-07-08,2026-07-22,Complete,RC-2026-0002
+RC-2026-0002,"PROVIDER, SAMPLE A.",TEST0000001,2026-07-06,Outpatient,OPPE,CrossSpecialty,EmergencyMedicine,sample.reviewer2@test.invalid,2026-07-08,2026-07-22,InProgress,RC-2026-0001
+RC-2026-0003,"PROVIDER, SAMPLE B.",TEST0000002,2026-06-29,Telemedicine,FPPE,Peer,EmergencyMedicine,sample.reviewer3@test.invalid,2026-07-01,2026-07-16,Overdue,

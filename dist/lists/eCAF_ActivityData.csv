@@ -1,0 +1,4 @@
+﻿Title,Provider,PeriodStart,PeriodEnd,Admissions,OutpatientEncounters,SurgicalProcedures,InvasiveProcedures,NoninvasiveProcedures,AdverseEvents,PctDirectPatientCare,PctIncompleteNotesOver3BD,DaysUnavailable,AppropriateMedUse,AppropriateBloodUse,RecordReviewsCompleted,RecordReviewsDeficient
+ACT-0001,"PROVIDER, SAMPLE A.",2026-01-01,2026-06-30,0,412,0,3,47,0,80,2,14,Y,NA,12,1
+ACT-0002,"PROVIDER, SAMPLE B.",2026-01-01,2026-06-30,22,690,0,31,88,1,90,6,5,Y,Y,10,2
+ACT-0003,"PROVIDER, SAMPLE C.",2026-01-01,2026-06-30,0,305,0,0,0,0,95,0,0,NA,NA,8,0

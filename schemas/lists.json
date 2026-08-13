@@ -1,0 +1,182 @@
+{
+  "site": "I MEF e-CAF (MQA Protected)",
+  "marking": "CUI // 10 U.S.C. 1102 MQA",
+  "lists": [
+    {
+      "internalName": "eCAF_Providers",
+      "displayName": "Providers",
+      "columns": [
+        {"name": "Title", "maps": "FullName", "type": "text", "required": true, "note": "Full provider name — CUI environment, no initials"},
+        {"name": "RankGrade", "type": "text"},
+        {"name": "Service", "type": "choice", "choices": ["Navy", "Army", "Air Force", "Civilian", "Contractor"], "note": "Drives which MILDEP guidance applies to EWP events"},
+        {"name": "Specialty", "type": "choice", "choices": ["PrimaryCare-GMO", "EmergencyMedicine", "Orthopedics", "MentalHealth", "PhysicalTherapy", "Dental", "Surgery", "Anesthesia", "Other"], "indexed": true, "note": "Extend locally; keep in sync with eCAF_Standards.Specialty"},
+        {"name": "Department", "type": "text", "indexed": true},
+        {"name": "UnitUIC", "type": "text"},
+        {"name": "ProviderCategory", "type": "choice", "choices": ["ActiveDuty", "Civilian", "Contractor", "ReserveComponent"]},
+        {"name": "PrivilegingStatus", "type": "choice", "choices": ["Full", "Supervised", "FPPE-Initial", "FPPE-ForCause", "Expired", "InProcess"]},
+        {"name": "PrivilegeExpiration", "type": "date", "indexed": true, "note": "Feeds F3 90-day STOP-EWP watch"},
+        {"name": "OPPEPeriodStart", "type": "date"},
+        {"name": "OPPEPeriodEnd", "type": "date"},
+        {"name": "FPPEWindowEnd", "type": "date"},
+        {"name": "ClinicalSupervisor", "type": "person"},
+        {"name": "PrimaryPreceptor", "type": "person"},
+        {"name": "AlternatePreceptor", "type": "person"},
+        {"name": "CQEnrolled", "type": "yesno"},
+        {"name": "OperationalPlatform", "type": "yesno", "note": "With PrivilegingStatus=Supervised triggers F4 stop-and-resolve (BUMEDNOTE 6000)"},
+        {"name": "CCQASLocation", "type": "text"}
+      ]
+    },
+    {
+      "internalName": "eCAF_ReviewCases",
+      "displayName": "Review Cases",
+      "brokenInheritance": true,
+      "columns": [
+        {"name": "Title", "maps": "CaseID", "type": "text", "note": "Auto: RC-YYYY-#### via app"},
+        {"name": "Provider", "type": "lookup", "target": "eCAF_Providers", "indexed": true},
+        {"name": "FIN", "type": "text", "maxLength": 12, "required": true, "note": "SOLE encounter identifier. No other patient-identifying columns permitted on any list."},
+        {"name": "EncounterDate", "type": "date", "required": true},
+        {"name": "EncounterType", "type": "choice", "choices": ["Outpatient", "Inpatient", "Procedure", "Telemedicine", "Emergency"], "note": "Telemedicine flag supports Vol 8 random-sampling requirement for distant-site review"},
+        {"name": "ReviewPurpose", "type": "choice", "choices": ["FPPE", "OPPE", "PAR-Supporting", "ForCause"], "indexed": true},
+        {"name": "ReviewType", "type": "choice", "choices": ["Peer", "CrossSpecialty"], "note": "Peer = same/similar specialty; only Peer counts in OPPE 10-floor and 455 item 11 denominators (credentials-committee-reversible default)"},
+        {"name": "RequiredReviewerSpecialty", "type": "choice", "choicesFrom": "eCAF_Providers.Specialty"},
+        {"name": "AssignedReviewer", "type": "person", "indexed": true},
+        {"name": "AssignedDate", "type": "date"},
+        {"name": "Suspense", "type": "date", "indexed": true},
+        {"name": "CaseStatus", "type": "choice", "choices": ["Assigned", "InProgress", "Complete", "Overdue", "Reassigned"], "indexed": true},
+        {"name": "PairedCase", "type": "lookup", "target": "eCAF_ReviewCases", "note": "Links the CrossSpecialty twin when intake creates a pair"}
+      ]
+    },
+    {
+      "internalName": "eCAF_ReviewResponses",
+      "displayName": "Review Responses",
+      "brokenInheritance": true,
+      "note": "One item per standard per case (long format). Enables standards-driven rendering and per-standard cross-specialty analytics without schema churn.",
+      "columns": [
+        {"name": "Title", "maps": "ResponseID", "type": "text"},
+        {"name": "ReviewCase", "type": "lookup", "target": "eCAF_ReviewCases", "indexed": true},
+        {"name": "Standard", "type": "lookup", "target": "eCAF_Standards", "indexed": true},
+        {"name": "Result", "type": "choice", "choices": ["MET", "NOT_MET", "NA"], "required": true, "note": "Canonical values only — normalize at write time, never store variants"},
+        {"name": "Comment", "type": "note", "note": "No PHI beyond what the standard requires; FIN lives on the case, not here"}
+      ]
+    },
+    {
+      "internalName": "eCAF_ReviewSummaries",
+      "displayName": "Review Summaries",
+      "brokenInheritance": true,
+      "note": "One item per completed case: overall determination + the fixed DHA 455 item 11 elements and six-domain constructs that are form-mandated regardless of standards library content.",
+      "columns": [
+        {"name": "Title", "maps": "SummaryID", "type": "text"},
+        {"name": "ReviewCase", "type": "lookup", "target": "eCAF_ReviewCases", "indexed": true},
+        {"name": "OverallDetermination", "type": "choice", "choices": ["Satisfactory", "Unsatisfactory"], "required": true},
+        {"name": "Item11Elements", "type": "note", "note": "JSON blob of the fixed 455 item 11 element results (MET/NOT_MET/NA each) — schema in standards-schema.json"},
+        {"name": "CompetencyDomains", "type": "note", "note": "JSON blob: 16 constructs across six domains, Satisfactory/Unsatisfactory/NotObserved each"},
+        {"name": "Narrative", "type": "note"},
+        {"name": "CompletedDate", "type": "date"}
+      ]
+    },
+    {
+      "internalName": "eCAF_Standards",
+      "displayName": "Standards Library",
+      "columns": [
+        {"name": "Title", "maps": "StandardID", "type": "text", "note": "e.g. DOC-001, PC-GMO-003"},
+        {"name": "StandardText", "type": "note", "required": true},
+        {"name": "Category", "type": "choice", "choices": ["Documentation", "ClinicalCare", "MedicationUse", "BloodUse", "ConsultsReferrals", "Communication", "ProfessionalKnowledge", "SystemsPractice", "MedStaffRule", "DHABusinessRule"]},
+        {"name": "Specialty", "type": "choice", "choices": ["Universal", "PrimaryCare-GMO", "EmergencyMedicine", "Orthopedics", "MentalHealth", "PhysicalTherapy"], "indexed": true, "note": "Universal renders on every case"},
+        {"name": "SourceCitation", "type": "text", "note": "Verbatim doc + section for DHA-sourced; 'Local SOP' or 'CL-validated' otherwise"},
+        {"name": "MapsTo", "type": "text", "note": "Semicolon list of form-field tokens per standards-schema.json (e.g. FPPE-3I;OPPE-IIIF)"},
+        {"name": "Status", "type": "choice", "choices": ["ACTIVE", "DRAFT-VALIDATE", "RETIRED"], "indexed": true, "note": "DRAFT-VALIDATE standards render with a visible draft badge and are excluded from generated documents"},
+        {"name": "ValidatedBy", "type": "person"},
+        {"name": "ValidatedDate", "type": "date"}
+      ]
+    },
+    {
+      "internalName": "eCAF_ActivityData",
+      "displayName": "Activity Data",
+      "columns": [
+        {"name": "Title", "maps": "RecordID", "type": "text"},
+        {"name": "Provider", "type": "lookup", "target": "eCAF_Providers", "indexed": true},
+        {"name": "PeriodStart", "type": "date"},
+        {"name": "PeriodEnd", "type": "date"},
+        {"name": "Admissions", "type": "number"},
+        {"name": "OutpatientEncounters", "type": "number"},
+        {"name": "SurgicalProcedures", "type": "number"},
+        {"name": "InvasiveProcedures", "type": "number"},
+        {"name": "NoninvasiveProcedures", "type": "number"},
+        {"name": "AdverseEvents", "type": "number"},
+        {"name": "PctDirectPatientCare", "type": "number"},
+        {"name": "PctIncompleteNotesOver3BD", "type": "number"},
+        {"name": "DaysUnavailable", "type": "number"},
+        {"name": "AppropriateMedUse", "type": "choice", "choices": ["Y", "N", "NA"]},
+        {"name": "AppropriateBloodUse", "type": "choice", "choices": ["Y", "N", "NA"]},
+        {"name": "RecordReviewsCompleted", "type": "number"},
+        {"name": "RecordReviewsDeficient", "type": "number"}
+      ]
+    },
+    {
+      "internalName": "eCAF_Routing",
+      "displayName": "Endorsement Routing",
+      "brokenInheritance": true,
+      "columns": [
+        {"name": "Title", "maps": "RoutingID", "type": "text"},
+        {"name": "Document", "type": "lookup", "target": "eCAF_Documents", "indexed": true},
+        {"name": "Stage", "type": "choice", "choices": ["Provider", "PeerProctor", "CRCChair", "DepartmentHead", "ClinicalLeader", "PA"], "note": "OPPE chain per Template Section X; FPPE/455 chains per their templates"},
+        {"name": "CurrentHolder", "type": "person", "indexed": true},
+        {"name": "Action", "type": "choice", "choices": ["Pending", "Recommend", "NotRecommend", "ReturnWithoutAction"], "note": "Mirrors CCQAS Clinical Leader actions"},
+        {"name": "ActionDate", "type": "date"},
+        {"name": "Comments", "type": "note"}
+      ]
+    },
+    {
+      "internalName": "eCAF_ReviewerPool",
+      "displayName": "Reviewer Pool",
+      "columns": [
+        {"name": "Title", "maps": "PoolID", "type": "text"},
+        {"name": "Reviewer", "type": "person", "indexed": true},
+        {"name": "QualifiedSpecialties", "type": "choiceMulti", "choicesFrom": "eCAF_Standards.Specialty"},
+        {"name": "Department", "type": "text"},
+        {"name": "Available", "type": "yesno"},
+        {"name": "OpenAssignments", "type": "number", "note": "Maintained by F1/F6; used for load-balanced round-robin"}
+      ]
+    },
+    {
+      "internalName": "eCAF_Holidays",
+      "displayName": "Federal Holidays",
+      "addedByBuild": "app-spec.md loads colHolidays from a holidays list and CLAUDE.md requires business-day math to exclude schemas/holidays.csv; the source lists.json defined no list to hold it. Generated by tools/build_holidays.py from 5 USC 6103.",
+      "columns": [
+        {"name": "Title", "maps": "HolidayLabel", "type": "text"},
+        {"name": "HolidayDate", "type": "date", "required": true, "indexed": true, "note": "OBSERVED date — business-day math uses this, not StatutoryDate"},
+        {"name": "HolidayName", "type": "text"},
+        {"name": "StatutoryDate", "type": "date", "note": "Reference only. Differs from HolidayDate when the holiday falls on a weekend"},
+        {"name": "Observed", "type": "choice", "choices": ["Y", "N"], "note": "Y = shifted for weekend observance"}
+      ]
+    },
+    {
+      "internalName": "eCAF_Config",
+      "displayName": "Configuration",
+      "addedByBuild": "CLAUDE.md requires the ReviewType denominator rule to be 'data, not hard-code' so the credentials committee can reverse it without an app change. This list is that data.",
+      "note": "Single-key/value settings read once in App.OnStart. MSP write, everyone read.",
+      "columns": [
+        {"name": "Title", "maps": "ConfigKey", "type": "text", "required": true, "indexed": true},
+        {"name": "ConfigValue", "type": "text", "required": true},
+        {"name": "Description", "type": "note"},
+        {"name": "LastChangedBy", "type": "person"},
+        {"name": "AuthorityRef", "type": "text", "note": "Credentials committee minute or instruction that authorised the current value"}
+      ]
+    }
+  ],
+  "documentLibrary": {
+    "internalName": "eCAF_Documents",
+    "displayName": "CAF Documents",
+    "structure": "folder-per-provider",
+    "contentTypes": [
+      {"name": "FPPE Product", "metadata": ["Provider", "Period", "Preceptor", "DocStatus"]},
+      {"name": "OPPE Product", "metadata": ["Provider", "Period", "EndorsementComplete", "UploadedToCCQAS", "CCQASUploadDate"]},
+      {"name": "DHA455 PAR", "metadata": ["Provider", "TriggerEvent", "Supervisor"]},
+      {"name": "DHA456 Signed", "metadata": ["Provider", "DateProviderSigned"]},
+      {"name": "Licensure-Cert", "metadata": ["Provider", "CertType", "Expiration"]},
+      {"name": "EWP Checklist Artifact", "metadata": ["Provider", "ChecklistType", "TransferEvent"]},
+      {"name": "Adverse-ForCause", "metadata": ["Provider"], "restricted": "eCAF-MSP + PA only"}
+    ]
+  },
+  "permissionGroups": ["eCAF-MSP", "eCAF-ClinicalLeaders", "eCAF-Reviewers", "eCAF-Preceptors", "eCAF-Providers"]
+}

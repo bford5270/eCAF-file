@@ -1,0 +1,4 @@
+﻿Title,Reviewer,QualifiedSpecialties,Department,Available,OpenAssignments
+POOL-0001,sample.reviewer1@test.invalid,Universal;PrimaryCare-GMO,SAMPLE Medical Battalion,Yes,1
+POOL-0002,sample.reviewer2@test.invalid,Universal;EmergencyMedicine,SAMPLE Medical Battalion,Yes,1
+POOL-0003,sample.reviewer3@test.invalid,Universal;EmergencyMedicine;PhysicalTherapy,SAMPLE Regiment Aid Station,No,1

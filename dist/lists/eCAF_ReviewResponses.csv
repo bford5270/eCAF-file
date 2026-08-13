@@ -1,0 +1,4 @@
+﻿Title,ReviewCase,Standard,Result,Comment
+RESP-0001,RC-2026-0001,DOC-001,MET,Sample response. No PHI in this field.
+RESP-0002,RC-2026-0001,MED-001,NOT_MET,Sample response. No PHI in this field.
+RESP-0003,RC-2026-0001,BLD-001,NA,Not applicable to this encounter type.

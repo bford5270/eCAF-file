@@ -1,0 +1,33 @@
+{
+  "purpose": "Defines the standard record shape and the MapsTo token vocabulary that links each standard to the form fields it feeds. The review instrument renders from ACTIVE + (DRAFT-VALIDATE badged) standards filtered to Specialty in {Universal, case.RequiredReviewerSpecialty}.",
+  "standardRecord": {
+    "StandardID": "Category-prefixed: DOC-, CC-, MED-, BLD-, CON-, COM-, PK-, SYS-, MSR-, DBR-, or specialty-prefixed PC-GMO-, EM-, ORTHO-, MH-, PT-",
+    "Result": ["MET", "NOT_MET", "NA"],
+    "aggregation": "Per standard: rate = MET / (MET + NOT_MET). NA excluded from both numerator and denominator. Rates computed per provider, per specialty, and MEF-wide for the cross-specialty dashboard."
+  },
+  "mapsToTokens": {
+    "FPPE-3E": "FPPE Template Section 3.E — Appropriate medication use (Y/N/NA)",
+    "FPPE-3F": "FPPE Template Section 3.F — Broad scope of treatments reviewed",
+    "FPPE-3I": "FPPE Template Section 3.I — % incomplete notes >3 business days",
+    "FPPE-3J": "FPPE Template Section 3.J — Appropriate blood/blood components use",
+    "FPPE-3L": "FPPE Template Section 3.L — # record reviews NOT within standard of care",
+    "FPPE-4-PC": "FPPE Template Section 4 — Patient Care domain",
+    "FPPE-4-PK": "FPPE Template Section 4 — Professional Knowledge domain",
+    "FPPE-4-PBLI": "FPPE Template Section 4 — Practice Based Learning & Improvement domain",
+    "FPPE-4-ICS": "FPPE Template Section 4 — Interpersonal & Communication Skills domain",
+    "OPPE-IIIF": "OPPE Template Section III.F — % incomplete notes >3 business days",
+    "OPPE-IVD": "OPPE Template Section IV.D — Appropriate blood/blood components use",
+    "OPPE-IVE": "OPPE Template Section IV.E — Appropriate medication use",
+    "OPPE-IVF": "OPPE Template Section IV.F — Medical record pertinence review",
+    "OPPE-IVG": "OPPE Template Section IV.G — Medical record OPPE review (# reviewed)",
+    "OPPE-IVH": "OPPE Template Section IV.H — Medical record OPPE review (# deficient)",
+    "OPPE-V": "OPPE Template Section V — Specialty specific quality indicator (min 2 per OPPE)",
+    "455-I11": "DHA 455 item 11 ratio/Y-N element block (element key appended, e.g. 455-I11:medication)",
+    "455-I13": "DHA 455 narrative support",
+    "DASH-ONLY": "Cross-specialty dashboard only; no form field"
+  },
+  "fixedInstrument": {
+    "note": "Form-mandated elements that render on EVERY case regardless of standards library content, captured in eCAF_ReviewSummaries: the DHA 455 item 11 element set (Item11Elements JSON) and the 16 competency constructs across six domains (CompetencyDomains JSON), plus OverallDetermination (Satisfactory/Unsatisfactory). The standards library ADDS specialty and rule-based depth; it never replaces the fixed instrument.",
+    "sixDomains": ["PatientCare", "MedicalClinicalKnowledge", "PracticeBasedLearning", "InterpersonalCommunication", "Professionalism", "SystemsBasedPractice"]
+  }
+}

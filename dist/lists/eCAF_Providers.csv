@@ -1,0 +1,4 @@
+﻿Title,RankGrade,Service,Specialty,Department,UnitUIC,ProviderCategory,PrivilegingStatus,PrivilegeExpiration,OPPEPeriodStart,OPPEPeriodEnd,FPPEWindowEnd,ClinicalSupervisor,PrimaryPreceptor,AlternatePreceptor,CQEnrolled,OperationalPlatform,CCQASLocation
+"PROVIDER, SAMPLE A.",O-3,Navy,PrimaryCare-GMO,SAMPLE Medical Battalion,TEST00,ActiveDuty,FPPE-Initial,2027-06-30,2026-01-01,2026-12-31,2026-09-30,sample.supervisor@test.invalid,sample.preceptor1@test.invalid,sample.preceptor2@test.invalid,Yes,No,TEST-MTF-01
+"PROVIDER, SAMPLE B.",O-4,Navy,EmergencyMedicine,SAMPLE Medical Battalion,TEST00,ActiveDuty,Supervised,2027-03-31,2026-01-01,2026-12-31,,sample.supervisor@test.invalid,sample.preceptor1@test.invalid,,Yes,Yes,TEST-MTF-01
+"PROVIDER, SAMPLE C.",GS-12,Civilian,PhysicalTherapy,SAMPLE Regiment Aid Station,TEST01,Civilian,Full,2026-09-15,2026-01-01,2026-12-31,,sample.supervisor@test.invalid,,,No,No,TEST-MTF-02
