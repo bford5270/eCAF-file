@@ -1,79 +1,191 @@
 {
   "_purpose": "The form-mandated instrument that renders on EVERY review case regardless of what is in the standards library. Captured in eCAF_ReviewSummaries as the Item11Elements and CompetencyDomains JSON blobs. The standards library ADDS depth; it never replaces this.",
-
   "_VERIFY_AGAINST_FORM": [
-    "The build package mandates 'the DHA 455 item 11 element set' and '16 competency constructs across the six domains' but does not enumerate either, and neither DHA Form 455 nor the DHA FPPE Template was supplied to this build.",
-    "item11Elements below is derived from the four 455-I11:<key> tokens that actually appear in standards-seed.csv (standardofcare, medication, blood, consults).",
-    "competencyConstructs below is derived from the FPPE Template Section 4 subsection references cited in standards-seed.csv (Patient Care A/B/C, Professional Knowledge A/C, ICS A/B, PBLI A/B), expanded to 16 across the six named domains.",
-    "ACTION FOR THE OPERATOR: open DHA Form 455 and the DHA FPPE Template, reconcile the two arrays below, and correct them before any real review is entered. Editing this file is the only change needed — the review screen renders from it and the aggregation reads element keys from it. Nothing is hard-coded downstream.",
-    "Reconciling this file is a listed gate in docs/dry-run.md and must be closed before cutover."
+    "RESOLVED for the competency constructs (2026-08-14): transcribed verbatim from",
+    "the DHA FPPE Template (Effective OCTOBER 2025) Section 4 and cross-checked",
+    "against the DHA OPPE Template (DHA-PM 6025.13 rev 02/16/2021) Section VII.",
+    "Both carry the same 16 constructs across the same six domains on the same",
+    "Satisfactory/Unsatisfactory/Not observed scale. Where the two forms word a",
+    "construct differently the FPPE wording is used (newer form) and the OPPE",
+    "wording is recorded in oppeVariant.",
+    "NOTE: the two forms order ICS A and B oppositely; keys here follow FPPE.",
+    "",
+    "STILL OPEN \u2014 item11Elements below. The DHA 455 supplied to this build is",
+    "watermarked DRAFT and its form-number block reads 'DHA FORM 455 (TEST),",
+    "OCT 2025', so item 11 has NOT been rebuilt from it. See docs/form-reconciliation.md."
   ],
-
   "item11Elements": [
     {
       "key": "standardofcare",
       "label": "Care was within the applicable standard of care",
       "mapsToToken": "455-I11:standardofcare",
-      "results": ["MET", "NOT_MET", "NA"]
+      "results": [
+        "MET",
+        "NOT_MET",
+        "NA"
+      ]
     },
     {
       "key": "medication",
       "label": "Medication use was appropriate",
       "mapsToToken": "455-I11:medication",
-      "results": ["MET", "NOT_MET", "NA"]
+      "results": [
+        "MET",
+        "NOT_MET",
+        "NA"
+      ]
     },
     {
       "key": "blood",
       "label": "Blood / blood component use was appropriate",
       "mapsToToken": "455-I11:blood",
-      "results": ["MET", "NOT_MET", "NA"]
+      "results": [
+        "MET",
+        "NOT_MET",
+        "NA"
+      ]
     },
     {
       "key": "consults",
       "label": "Consults and referrals were appropriate and timely",
       "mapsToToken": "455-I11:consults",
-      "results": ["MET", "NOT_MET", "NA"]
+      "results": [
+        "MET",
+        "NOT_MET",
+        "NA"
+      ]
     }
   ],
-
   "competencyDomains": [
     "PatientCare",
-    "MedicalClinicalKnowledge",
-    "PracticeBasedLearning",
-    "InterpersonalCommunication",
+    "ProfessionalKnowledge",
+    "PracticeBasedLearningImprovement",
+    "InterpersonalCommunicationSkills",
     "Professionalism",
     "SystemsBasedPractice"
   ],
-
   "competencyConstructs": [
-    {"key": "PC-A", "domain": "PatientCare", "label": "Clinical problem solving is effective and appropriate to the presentation", "sourceRef": "FPPE Template Sec 4 Patient Care A"},
-    {"key": "PC-B", "domain": "PatientCare", "label": "Caring and respectful conduct toward patients and families", "sourceRef": "FPPE Template Sec 4 Patient Care B"},
-    {"key": "PC-C", "domain": "PatientCare", "label": "Consults and specialty involvement used appropriately", "sourceRef": "FPPE Template Sec 4 Patient Care C"},
-    {"key": "MK-A", "domain": "MedicalClinicalKnowledge", "label": "Knowledge of established and evolving biomedical and clinical sciences", "sourceRef": "FPPE Template Sec 4 Professional Knowledge A"},
-    {"key": "MK-B", "domain": "MedicalClinicalKnowledge", "label": "Analytic approach to clinical situations is sound", "sourceRef": "FPPE Template Sec 4 Professional Knowledge B"},
-    {"key": "MK-C", "domain": "MedicalClinicalKnowledge", "label": "Current and appropriate techniques and treatments applied", "sourceRef": "FPPE Template Sec 4 Professional Knowledge C"},
-    {"key": "PB-A", "domain": "PracticeBasedLearning", "label": "Uses evidence-based data in clinical decisions", "sourceRef": "FPPE Template Sec 4 PBLI A"},
-    {"key": "PB-B", "domain": "PracticeBasedLearning", "label": "Participates in performance improvement and acts on feedback", "sourceRef": "FPPE Template Sec 4 PBLI B"},
-    {"key": "PB-C", "domain": "PracticeBasedLearning", "label": "Maintains required training and continuing education currency", "sourceRef": "FPPE Template Sec 4 PBLI (derived)"},
-    {"key": "IC-A", "domain": "InterpersonalCommunication", "label": "Record entries are timely, clear, legible and complete", "sourceRef": "FPPE Template Sec 4 ICS A"},
-    {"key": "IC-B", "domain": "InterpersonalCommunication", "label": "Communicates effectively with staff, patients and families", "sourceRef": "FPPE Template Sec 4 ICS B"},
-    {"key": "IC-C", "domain": "InterpersonalCommunication", "label": "Effective handoff and transition-of-care communication", "sourceRef": "FPPE Template Sec 4 ICS (derived)"},
-    {"key": "PR-A", "domain": "Professionalism", "label": "Adheres to ethical principles and professional conduct standards", "sourceRef": "FPPE Template Sec 4 Professionalism (derived)"},
-    {"key": "PR-B", "domain": "Professionalism", "label": "Practices within granted privileges and scope of utilization", "sourceRef": "DHA-PM 6025.13 Vol 8 scope of utilization"},
-    {"key": "SB-A", "domain": "SystemsBasedPractice", "label": "Uses system resources and referral pathways appropriately", "sourceRef": "FPPE Template Sec 4 Systems Based Practice (derived)"},
-    {"key": "SB-B", "domain": "SystemsBasedPractice", "label": "Reports patient safety events through the established channel", "sourceRef": "DHA OPPE Template Sec VI.C construct"}
+    {
+      "key": "PC-A",
+      "domain": "PatientCare",
+      "label": "Uses effective/appropriate clinical problem solving skills",
+      "sourceRef": "FPPE Sec 4 Patient Care A; OPPE Sec VII Patient Care A"
+    },
+    {
+      "key": "PC-B",
+      "domain": "PatientCare",
+      "label": "Behaves in a caring and respectful manner with patient",
+      "sourceRef": "FPPE Sec 4 Patient Care B",
+      "oppeVariant": "OPPE Sec VII: 'Patient satisfaction with practitioner (caring & respectful behaviors)'"
+    },
+    {
+      "key": "PC-C",
+      "domain": "PatientCare",
+      "label": "Uses consultants/referrals consistent with the standard of care",
+      "sourceRef": "FPPE Sec 4 Patient Care C",
+      "oppeVariant": "OPPE Sec VII: 'Uses consultants and referrals appropriately'"
+    },
+    {
+      "key": "PK-A",
+      "domain": "ProfessionalKnowledge",
+      "label": "Uses evidence based data in clinical decisions/practice",
+      "sourceRef": "FPPE Sec 4 Professional Knowledge A; OPPE Sec VII Professional Knowledge A"
+    },
+    {
+      "key": "PK-B",
+      "domain": "ProfessionalKnowledge",
+      "label": "Maintains ongoing continuing medical education",
+      "sourceRef": "FPPE Sec 4 Professional Knowledge B; OPPE Sec VII Professional Knowledge B"
+    },
+    {
+      "key": "PK-C",
+      "domain": "ProfessionalKnowledge",
+      "label": "Uses current/appropriate techniques and treatments in care",
+      "sourceRef": "FPPE Sec 4 Professional Knowledge C",
+      "oppeVariant": "OPPE Sec VII: 'Current/appropriate techniques & treatments used in care'"
+    },
+    {
+      "key": "PBLI-A",
+      "domain": "PracticeBasedLearningImprovement",
+      "label": "Maintains compliance with new national measures",
+      "sourceRef": "FPPE Sec 4 PBLI A",
+      "oppeVariant": "OPPE Sec VII: 'Compliance with new national measures'"
+    },
+    {
+      "key": "PBLI-B",
+      "domain": "PracticeBasedLearningImprovement",
+      "label": "Cooperates in ongoing process improvements (self and others)",
+      "sourceRef": "FPPE Sec 4 PBLI B",
+      "oppeVariant": "OPPE Sec VII: 'Cooperation in continuous improvement process (self & others)'"
+    },
+    {
+      "key": "PBLI-C",
+      "domain": "PracticeBasedLearningImprovement",
+      "label": "Facilitates learning of all staff involved in patient care",
+      "sourceRef": "FPPE Sec 4 PBLI C; OPPE Sec VII PBLI C"
+    },
+    {
+      "key": "ICS-A",
+      "domain": "InterpersonalCommunicationSkills",
+      "label": "Writes all consults & record entries in a timely, clear, legible, and complete manner",
+      "sourceRef": "FPPE Sec 4 ICS A",
+      "oppeVariant": "OPPE Sec VII lists this as ICS B"
+    },
+    {
+      "key": "ICS-B",
+      "domain": "InterpersonalCommunicationSkills",
+      "label": "Communicates information effectively to staff, patients, and families",
+      "sourceRef": "FPPE Sec 4 ICS B",
+      "oppeVariant": "OPPE Sec VII lists this as ICS A"
+    },
+    {
+      "key": "PROF-A",
+      "domain": "Professionalism",
+      "label": "Acts in a professional manner adhering to the Medical Staff Bylaws",
+      "sourceRef": "FPPE Sec 4 Professionalism A",
+      "oppeVariant": "OPPE Sec VII: 'adhering to the Medical Staff Code'"
+    },
+    {
+      "key": "PROF-B",
+      "domain": "Professionalism",
+      "label": "Addresses professional disagreements in a private, constructive manner",
+      "sourceRef": "FPPE Sec 4 Professionalism B; OPPE Sec VII Professionalism B"
+    },
+    {
+      "key": "PROF-C",
+      "domain": "Professionalism",
+      "label": "Uses sensitivity/responsiveness regardless of age, culture, race, or sex",
+      "sourceRef": "FPPE Sec 4 Professionalism C",
+      "oppeVariant": "OPPE Sec VII: '...race or gender'"
+    },
+    {
+      "key": "SBP-A",
+      "domain": "SystemsBasedPractice",
+      "label": "Complies with efforts to maintain patient safety culture and reduce errors",
+      "sourceRef": "FPPE Sec 4 SBP A; OPPE Sec VII SBP A"
+    },
+    {
+      "key": "SBP-B",
+      "domain": "SystemsBasedPractice",
+      "label": "Advocates for quality & conserves resources while optimizing health care",
+      "sourceRef": "FPPE Sec 4 SBP B; OPPE Sec VII SBP B"
+    }
   ],
-
-  "constructResults": ["Satisfactory", "Unsatisfactory", "NotObserved"],
-
+  "constructResults": [
+    "Satisfactory",
+    "Unsatisfactory",
+    "NotObserved"
+  ],
   "overallDetermination": {
     "field": "eCAF_ReviewSummaries.OverallDetermination",
-    "values": ["Satisfactory", "Unsatisfactory"],
-    "note": "This is the ONLY overall rating the reviewer supplies. It does not and must not propagate to DHA 455 item 12 (Poor/Fair/Good/Superior) — no crosswalk exists between the two scales. See CLAUDE.md hard rule."
+    "values": [
+      "Satisfactory",
+      "Unsatisfactory"
+    ],
+    "note": "This is the ONLY overall rating the reviewer supplies. It does not and must not propagate to DHA 455 item 12 (Poor/Fair/Good/Superior) \u2014 no crosswalk exists between the two scales. See CLAUDE.md hard rule."
   },
-
   "_blobShape": {
-    "_why_array_not_map": "Stored as a JSON ARRAY of {key,result} records, not an object map. Power Fx ParseJSON returns an Untyped object whose fields can only be reached by literal name (obj.medication), so an object map cannot be read with a variable element key — which is exactly what the aggregation does when it loops over the element set. An array is walkable with ForAll/Filter and keeps the element set data-driven. Do not 'simplify' this to a map.",
+    "_why_array_not_map": "Stored as a JSON ARRAY of {key,result} records, not an object map. Power Fx ParseJSON returns an Untyped object whose fields can only be reached by literal name (obj.medication), so an object map cannot be read with a variable element key \u2014 which is exactly what the aggregation does when it loops over the element set. An array is walkable with ForAll/Filter and keeps the element set data-driven. Do not 'simplify' this to a map.",
     "Item11Elements": "[{\"key\":\"standardofcare\",\"result\":\"MET\"},{\"key\":\"medication\",\"result\":\"NOT_MET\"},{\"key\":\"blood\",\"result\":\"NA\"},{\"key\":\"consults\",\"result\":\"MET\"}]",
     "CompetencyDomains": "[{\"key\":\"PC-A\",\"result\":\"Satisfactory\"}, ... one record per construct key above]"
   }

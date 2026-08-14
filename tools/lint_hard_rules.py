@@ -458,9 +458,10 @@ def main():
     print("    § 1102 boundary; app-side filtering is UX only)")
     print("  · F1 item-level permission stamping, tested with two accounts")
     print("  · Business-day math against the tenant's observed holiday calendar")
-    print("  · fixed-instrument.json reconciled against the real DHA 455 and")
-    print("    FPPE Template — the element and construct sets were derived, not")
-    print("    transcribed from the forms")
+    print("  · DHA 455 item 11/12 — the supplied 455 is marked TEST/DRAFT, so")
+    print("    item11Elements is still the derived placeholder. The 16 competency")
+    print("    constructs ARE now transcribed from the real FPPE/OPPE forms.")
+    print("    See docs/form-reconciliation.md")
     return 0
 
 

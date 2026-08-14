@@ -21,6 +21,7 @@ to. A human operator imports everything through the browser or `pac`.
 | Accept the build | `docs/dry-run.md` |
 | Ingest completed paper/Word review forms | `docs/form-ingest.md` |
 | Check the compliance posture | `docs/hard-rule-review.md` |
+| See how the artifacts match the real DHA forms | `docs/form-reconciliation.md` |
 
 ## Layout
 
@@ -80,10 +81,11 @@ be verified in the tenant, and are gated in `docs/dry-run.md`.
 
 ## Known open item
 
-`dist/app/src/fixed-instrument.json` — the DHA 455 item 11 element set and the 16
-competency constructs — was **derived from the standards seed's MapsTo tokens,
-not transcribed from the forms**, because neither DHA Form 455 nor the DHA FPPE
-Template was supplied to this build. It must be reconciled by someone holding the
-actual forms before real reviews are entered. Nothing downstream is hard-coded to
-it: correct that one file, re-run the generators, and the correction propagates.
-See `docs/hard-rule-review.md`.
+The 16 competency constructs are now **transcribed verbatim** from the real DHA
+FPPE and OPPE templates, and FPPE Section 3 / OPPE Sections III–V all check out.
+What is still open is the **DHA 455 item 11 element set**: the 455 supplied to
+this build is watermarked DRAFT and its form-number block reads
+`DHA FORM 455 (TEST), OCT 2025`, so item 11 and item 12 have not been rebuilt
+around it. The real item 12 is an eleven-row Poor/Fair/Good/Superior/Not Observed
+grid rather than a single rating — which makes the no-auto-rating rule bigger,
+not smaller. See `docs/form-reconciliation.md`.

@@ -38,7 +38,15 @@ listed in `dist/lists/provisioning-runbook.md` and gated in `docs/dry-run.md`:
 3. **Phase 0 approval** from the tenant/RMF POC for a citizen-developed app
    holding § 1102 / CUI content.
 
-## Open item — carried, not closed
+## Open item — mostly closed 14 Aug 2026
+
+The three DHA forms were supplied and decoded; see **`docs/form-reconciliation.md`**
+for the full reconciliation. The 16 competency constructs are now transcribed
+verbatim from FPPE Section 4, cross-checked against OPPE Section VII. What
+remains open is only the DHA 455 item 11 element set, because the 455 supplied is
+watermarked DRAFT and reads `DHA FORM 455 (TEST), OCT 2025`.
+
+The original statement of the item, for history:
 
 **`dist/app/src/fixed-instrument.json` is derived, not transcribed.**
 
