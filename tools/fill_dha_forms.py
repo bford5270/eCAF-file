@@ -63,54 +63,56 @@ def _reader(path):
 # spaces and dropped punctuation ("Total  of Encounters"), so these are ugly on
 # purpose. Do not tidy them — they must match the PDF byte for byte.
 FPPE_MAP = {
-    "facility":            "Medical Facility",
-    "department":          "DepartmentClinic",
-    "provider_name":       "Providers Name",
-    "direct_obs_count":    "Direct observation Exact number",
-    "record_review_count": "Record review Exact number",
-    # Section 3 — Practice Volume Data and Quality Measures (A-L)
-    "s3a_total_encounters":        "Total  of Encounters",
-    "s3b_outpatient_encounters":   "Total  of Outpatient Encounters",
-    "s3c_inpatient_encounters":    "Total  of Inpatient Encounters if applicable",
-    "s3d_surgical_procedures":     "Total  of surgical procedures if applicable",
-    "s3e_appropriate_med_use":     "Appropriate medication use Y N or NA",
-    "s3f_broad_scope_treatments":  "Broad scope of treatments reviewed Y N or NA",
-    "s3g_pct_direct_patient_care": "Total  of time in direct patient care",
-    "s3h_patient_safety_events":   "Total  of adverse events",
-    "s3i_pct_incomplete_notes":    "Total  of incomplete notes 3 business days",
-    "s3j_appropriate_blood_use":   "Appropriate blood useblood components use Y N or NA",
-    "s3k_record_reviews_completed":"Total  of completed record reviews",
-    "s3l_reviews_not_within_soc":  "Total  of record reviews NOT within standard of care",
-    "additional_comments":         "Additional Comments",
+    "Medical Facility":            "Medical Facility",
+    "Department/Clinic":           "DepartmentClinic",
+    "Provider's Name":             "Providers Name",
+    "Direct observation (exact number)": "Direct observation Exact number",
+    "Record review (exact number)":      "Record review Exact number",
+    # Section 3 — Practice Volume Data and Quality Measures (A-L), worded as
+    # the form words them so the spreadsheet reads like the page in front of you.
+    "3.A Total # of Encounters":                  "Total  of Encounters",
+    "3.B Total # of Outpatient Encounters":       "Total  of Outpatient Encounters",
+    "3.C Total # of Inpatient Encounters":        "Total  of Inpatient Encounters if applicable",
+    "3.D Total # of surgical procedures":         "Total  of surgical procedures if applicable",
+    "3.E Appropriate medication use (Y/N/NA)":    "Appropriate medication use Y N or NA",
+    "3.F Broad scope of treatments reviewed (Y/N/NA)": "Broad scope of treatments reviewed Y N or NA",
+    "3.G Total % of time in direct patient care": "Total  of time in direct patient care",
+    "3.H Total # of patient safety events":       "Total  of adverse events",
+    "3.I Total % of incomplete notes >3 business days": "Total  of incomplete notes 3 business days",
+    "3.J Appropriate blood/blood components use (Y/N/NA)": "Appropriate blood useblood components use Y N or NA",
+    "3.K Total # of completed record reviews":    "Total  of completed record reviews",
+    "3.L Total # of record reviews NOT within standard of care": "Total  of record reviews NOT within standard of care",
+    "Additional Comments":                        "Additional Comments",
 }
 
 OPPE_MAP = {
-    "reporting_activity": "Reporting Activity",
-    "provider_name": "Provider RankName",
-    "period_from": "From",
-    "period_to":   "To",
-    "department":  "Department",
-    "position":    "Position",
-    "life_support_trainings": "Department Specific Life SupportTrainings and expiration",
+    "Reporting Activity":  "Reporting Activity",
+    "Provider Rank/Name":  "Provider RankName",
+    "Period From":         "From",
+    "Period To":           "To",
+    "Department":          "Department",
+    "Position":            "Position",
+    "Department Specific Life Support/Trainings and expiration":
+                           "Department Specific Life SupportTrainings and expiration",
     # Section III — Practice Volume Data (A-F)
-    "s3a_admissions":              "Number of Admissions",
-    "s3b_outpatient_encounters":   "Number of outpatient encounters",
-    "s3c_days_unavailable":        "Days unavailable due to TADdeployment etc",
-    "s3d_adverse_events":          "Number of adverse events",
-    "s3e_pct_direct_patient_care": "Percent of time in direct patient care",
-    "s3f_pct_incomplete_notes":    " incomplete notes  3 business days",
-    # Section IV.G/H. The PDF names these "FPPE review" — a typo in DHA's own
-    # form; on the page they sit under Section IV "Medical record OPPE review".
-    # Mapped to what the page says, keyed to what the PDF actually calls them.
-    "s4g_records_reviewed":  "Medical record FPPE review  reviewed",
-    "s4h_records_deficient": "Medical record FPPE review  deficient",
+    "III.A Number of Admissions":                    "Number of Admissions",
+    "III.B Number of outpatient encounters":         "Number of outpatient encounters",
+    "III.C Days unavailable due to TAD/deployment":  "Days unavailable due to TADdeployment etc",
+    "III.D Number of adverse events":                "Number of adverse events",
+    "III.E Percent of time in direct patient care":  "Percent of time in direct patient care",
+    "III.F % incomplete notes > 3 business days":    " incomplete notes  3 business days",
+    # Section IV.G/H. The PDF names these fields "FPPE review" — a typo in DHA's
+    # own form; on the page they sit under Section IV "Medical record OPPE
+    # review". Column reads as the page does, value goes where the PDF wants it.
+    "IV.G Medical record OPPE review (# reviewed)":  "Medical record FPPE review  reviewed",
+    "IV.H Medical record OPPE review (# deficient)": "Medical record FPPE review  deficient",
     # Section V — specialty specific quality indicators (minimum of 2)
-    "s5a_metric": "Metric",
-    "s5b_metric": "Metric_2",
-    # Section VIII / IX narrative
-    "s8_clinical_competency": "SECTION VIII CLINICAL COMPETENCY OF CORE AND NON CORE PRIVILEGES"
-                              "Address overall clinical competency of this provider attach "
-                              "additional sheets as neededRow1",
+    "V.A Metric": "Metric",
+    "V.B Metric": "Metric_2",
+    "VIII Clinical competency narrative":
+        "SECTION VIII CLINICAL COMPETENCY OF CORE AND NON CORE PRIVILEGES"
+        "Address overall clinical competency of this provider attach "
+        "additional sheets as neededRow1",
     # NOT MAPPED ON PURPOSE: OPPE Section IV A-F (surgical / invasive /
     # noninvasive procedures, blood use, medication use, record pertinence).
     # This PDF gives them no named fields — they are generic "Text195"-style
@@ -118,6 +120,53 @@ OPPE_MAP = {
     # use" would put a number on a credentialing document based on a hunch.
     # Run --list-fields, identify them by opening the PDF, and add them here.
 }
+
+# Old code-style column names still work, so a spreadsheet made before the
+# rename does not silently drop every value. Values are LISTS because the same
+# old key means different fields on the two forms — "provider_name" is
+# "Provider's Name" on the FPPE and "Provider Rank/Name" on the OPPE — so
+# resolution tries each candidate against the map for the form being filled.
+ALIASES = {
+    "facility": ["Medical Facility"],
+    "department": ["Department", "Department/Clinic"],
+    "provider_name": ["Provider Rank/Name", "Provider's Name"],
+    "position": ["Position"],
+    "reporting_activity": ["Reporting Activity"],
+    "period_from": ["Period From"], "period_to": ["Period To"],
+    "s3a_total_encounters": ["3.A Total # of Encounters"],
+    "s3b_outpatient_encounters": ["III.B Number of outpatient encounters",
+                                  "3.B Total # of Outpatient Encounters"],
+    "s3c_inpatient_encounters": ["3.C Total # of Inpatient Encounters"],
+    "s3d_surgical_procedures": ["3.D Total # of surgical procedures"],
+    "s3e_appropriate_med_use": ["3.E Appropriate medication use (Y/N/NA)"],
+    "s3f_broad_scope_treatments": ["3.F Broad scope of treatments reviewed (Y/N/NA)"],
+    "s3g_pct_direct_patient_care": ["3.G Total % of time in direct patient care"],
+    "s3h_patient_safety_events": ["3.H Total # of patient safety events"],
+    "s3i_pct_incomplete_notes": ["3.I Total % of incomplete notes >3 business days"],
+    "s3j_appropriate_blood_use": ["3.J Appropriate blood/blood components use (Y/N/NA)"],
+    "s3k_record_reviews_completed": ["3.K Total # of completed record reviews"],
+    "s3l_reviews_not_within_soc": ["3.L Total # of record reviews NOT within standard of care"],
+    "s3a_admissions": ["III.A Number of Admissions"],
+    "s3c_days_unavailable": ["III.C Days unavailable due to TAD/deployment"],
+    "s3d_adverse_events": ["III.D Number of adverse events"],
+    "s3e_pct_direct_patient_care": ["III.E Percent of time in direct patient care"],
+    "s3f_pct_incomplete_notes": ["III.F % incomplete notes > 3 business days"],
+    "s4g_records_reviewed": ["IV.G Medical record OPPE review (# reviewed)"],
+    "s4h_records_deficient": ["IV.H Medical record OPPE review (# deficient)"],
+    "s5a_metric": ["V.A Metric"], "s5b_metric": ["V.B Metric"],
+    "additional_comments": ["Additional Comments"],
+}
+
+
+def resolve_key(k, fmap):
+    """Column name -> PDF field name. Tries the friendly name, then any old
+    alias that exists in this form's map. Returns None if unknown."""
+    if k in fmap:
+        return fmap[k]
+    for cand in ALIASES.get(k, []):
+        if cand in fmap:
+            return fmap[cand]
+    return None
 
 # Never fillable, whatever the input says. Matched case-insensitively as a
 # substring of the PDF field name.
@@ -191,7 +240,33 @@ def resolve_map(form):
     return {"FPPE": FPPE_MAP, "OPPE": OPPE_MAP}[form.upper()]
 
 
-def cmd_fill(inputs_path, form, template, outdir):
+def write_xfdf(values, template_name, out_path):
+    """Write an Acrobat XFDF — the field values, not the document.
+
+    Why this exists: the person filling forms is not the person who can install
+    Python. An XFDF is opened by double-clicking it; Acrobat finds the PDF named
+    in <f href> and populates it. Nothing installs on the recipient's machine,
+    and a credentialing office already lives in Acrobat.
+
+    The PDF must sit next to the XFDF (or at the href path) — Acrobat resolves
+    href relative to the XFDF's own location.
+    """
+    import xml.sax.saxutils as sax
+    fields = "".join(
+        f"<field name={sax.quoteattr(name)}><value>{sax.escape(str(val))}</value></field>"
+        for name, val in values.items()
+    )
+    xml = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<xfdf xmlns="http://ns.adobe.com/xfdf/" xml:space="preserve">'
+        f"<f href={sax.quoteattr(template_name)}/>"
+        f"<fields>{fields}</fields></xfdf>"
+    )
+    with open(out_path, "w", encoding="utf-8") as fh:
+        fh.write(xml)
+
+
+def cmd_fill(inputs_path, form, template, outdir, fmt="both"):
     from pypdf import PdfReader, PdfWriter
     from pypdf.generic import NameObject, BooleanObject
 
@@ -205,13 +280,14 @@ def cmd_fill(inputs_path, form, template, outdir):
     problems, written = [], []
 
     for rec in records:
-        who = rec.get("provider_name") or rec.get("_id") or "unnamed"
+        who = (rec.get("Provider Rank/Name") or rec.get("Provider's Name")
+               or rec.get("provider_name") or rec.get("_id") or "unnamed")
 
         # --- Refuse judgement fields, whatever they are called.
         for k in rec:
             if k.startswith("_"):
                 continue
-            target = fmap.get(k, k)
+            target = resolve_key(k, fmap) or k
             looks_like_rating = str(rec.get(k, "")).strip().lower() in (
                 "satisfactory", "unsatisfactory", "not observed", "notobserved",
                 "poor", "fair", "good", "superior",
@@ -239,7 +315,7 @@ def cmd_fill(inputs_path, form, template, outdir):
                 continue
             if k in refused:
                 continue                      # already reported above
-            target = fmap.get(k)
+            target = resolve_key(k, fmap)
             if target is None:
                 unknown.append(k)
                 continue
@@ -265,10 +341,16 @@ def cmd_fill(inputs_path, form, template, outdir):
             writer.update_page_form_field_values(page, values, auto_regenerate=False)
 
         safe = re.sub(r"[^A-Za-z0-9._-]+", "-", str(who)).strip("-") or "form"
-        out = os.path.join(outdir, f"{form.upper()}_{safe}.pdf")
-        with open(out, "wb") as fh:
-            writer.write(fh)
-        written.append((out, len(values)))
+        stem = os.path.join(outdir, f"{form.upper()}_{safe}")
+
+        if fmt in ("pdf", "both"):
+            with open(stem + ".pdf", "wb") as fh:
+                writer.write(fh)
+            written.append((stem + ".pdf", len(values)))
+
+        if fmt in ("xfdf", "both"):
+            write_xfdf(values, os.path.basename(template), stem + ".xfdf")
+            written.append((stem + ".xfdf", len(values)))
 
     for out, n in written:
         print(f"  {os.path.basename(out):<44} {n:>3} fields filled")
@@ -278,7 +360,13 @@ def cmd_fill(inputs_path, form, template, outdir):
         for p in problems:
             print(f"  - {p}")
 
-    print(f"\nFilled {len(written)} form(s) into {outdir}/")
+    n_pdf = sum(1 for f, _ in written if f.endswith(".pdf"))
+    n_xfdf = sum(1 for f, _ in written if f.endswith(".xfdf"))
+    print(f"\n{n_pdf} PDF(s), {n_xfdf} XFDF(s) into {outdir}/")
+    if n_xfdf:
+        print(f"Put {os.path.basename(template)} in that folder alongside the "
+              f".xfdf files, then send both. The recipient double-clicks the "
+              f".xfdf and Acrobat opens the form populated — nothing to install.")
     print("Sections left deliberately blank for a human: "
           + ("FPPE Section 4 (16 competency constructs) and all signatures."
              if form.upper() == "FPPE" else
@@ -297,6 +385,10 @@ def main():
     ap.add_argument("--form", choices=["FPPE", "OPPE", "fppe", "oppe"])
     ap.add_argument("--template", metavar="PDF")
     ap.add_argument("--out", default="dist/filled")
+    ap.add_argument("--format", choices=["pdf", "xfdf", "both"], default="both",
+                    help="pdf = a filled PDF you can check; xfdf = a file the "
+                         "recipient double-clicks to open the real DHA form "
+                         "populated, with nothing to install; both (default)")
     a = ap.parse_args()
 
     if a.blank_inputs:
@@ -308,7 +400,7 @@ def main():
     if a.fill:
         if not (a.form and a.template):
             ap.error("--fill needs --form and --template")
-        return cmd_fill(a.fill, a.form, a.template, a.out)
+        return cmd_fill(a.fill, a.form, a.template, a.out, a.format)
     ap.print_help()
     return 1
 

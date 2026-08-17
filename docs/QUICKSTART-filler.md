@@ -56,7 +56,12 @@ Leave anything you don't have blank — a blank cell is skipped, not written as 
 empty value, so a half-filled row fills what it has and leaves the rest of the
 form alone for you to complete by hand.
 
-Column names are readable: `s3b_outpatient_encounters` is Section III item B.
+Column names are the form's own words, prefixed with the section:
+`III.B Number of outpatient encounters` is exactly what page 2 calls it. Fill the
+sheet with the form open beside you and they line up.
+
+*(Old-style column names from an earlier version — `s3b_outpatient_encounters`
+and friends — still work, so a sheet you already started is not wasted.)*
 
 Save it as CSV. (Excel will warn about keeping CSV format — keep it.)
 
@@ -70,7 +75,28 @@ python fill_dha_forms.py --fill my-oppe.csv --form OPPE ^
 *(That `^` is a Windows line-continuation. On Mac/Linux use `\` instead, or just
 type the whole thing on one line.)*
 
-You get one PDF per row in a new `filled` folder, named after the provider.
+For each row you get **two** files in a new `filled` folder:
+
+| File | What it's for |
+|---|---|
+| `OPPE_<provider>.pdf` | The filled form. Open it, check it. |
+| `OPPE_<provider>.xfdf` | **The one you send other people.** |
+
+## Step 3b — handing forms to people who can't run this
+
+The `.xfdf` is the answer to "how does someone else use this without installing
+anything". It holds the field values, not the document.
+
+Copy the blank `DHA_OPPE_Template.pdf` into the `filled` folder alongside the
+`.xfdf` files, then send both. The recipient **double-clicks the `.xfdf`** and
+Acrobat opens the DHA form already populated. Nothing installs on their machine;
+a credentialing office already has Acrobat.
+
+Acrobat resolves the PDF by the filename recorded inside the `.xfdf`, relative to
+wherever the `.xfdf` is — so the two files must travel together and the PDF must
+keep its name.
+
+`--format pdf` or `--format xfdf` if you only want one kind.
 
 ## Step 4 — open it and finish it
 
