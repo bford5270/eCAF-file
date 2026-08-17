@@ -112,3 +112,59 @@ The generated `ingest-report.md` carries this checklist:
 - `CaseID` must appear as `RC-YYYY-NNNN`. If the form does not carry one, the
   rows come out with a blank `ReviewCase` and the report says so; fill it in
   before import.
+
+---
+
+# Filling the real DHA PDFs (`tools/fill_dha_forms.py`)
+
+The reverse direction: inputs in, a filled DHA form out.
+
+```
+python3 tools/fill_dha_forms.py --list-fields DHA_OPPE_Template.pdf
+python3 tools/fill_dha_forms.py --fill inputs.json --form OPPE \
+      --template DHA_OPPE_Template.pdf --out dist/filled/
+```
+
+It writes into the **actual DHA PDF** — the file the MSP office already uses —
+because the FPPE and OPPE templates are AcroForm PDFs with named fields (102 and
+126 of them). Not a lookalike, not a transcription step. No SharePoint, no Power
+Apps, no premium connector, no tenant approval: it runs on a laptop today.
+
+`dist/filled/` is gitignored — its contents are CUI once you use it for real.
+
+## The line it does not cross
+
+**It fills what is counted. It never fills what is judged.**
+
+| | |
+|---|---|
+| **Filled** | Administrative identity, and practice-volume data — FPPE Section 3 (A–L), OPPE Section III, and the Section IV.G/H record-review counts. Numbers the MSP already holds. Retyping them is transcription, and transcription is where errors enter. |
+| **Never** | FPPE Section 4 / OPPE Section VII (the 16 competency constructs), OPPE Section VI facility-wide monitors, every signature block, DHA 455 item 12. |
+
+Those are a preceptor's, clinical leader's or supervisor's professional judgement
+about a named provider. A tool that pre-checks them is not saving typing — it is
+manufacturing an assessment, and on the signed page it would be indistinguishable
+from one a human actually made. This is the DHA 455 item 12 rule applied
+consistently rather than only where the build package happened to name it.
+
+Refusal is by field name **and** by value: an input whose value is
+`Satisfactory` / `Poor` / `Superior` is rejected even if its key looks innocuous,
+and the run exits non-zero.
+
+## Deliberately unmapped
+
+OPPE **Section IV A–F** (surgical / invasive / noninvasive procedures, blood use,
+medication use, record pertinence) has no named fields in the PDF — they are
+generic `Text195`-style boxes and unlabelled dropdowns. Guessing which anonymous
+box is "blood use" would put a number on a credentialing document based on a
+hunch. Open the PDF, identify them, and add them to `OPPE_MAP`.
+
+One oddity worth knowing: the PDF names the Section IV.G/H fields
+`Medical record FPPE review reviewed/deficient` — a typo in DHA's own form; on
+the page they sit under Section IV "Medical record **OPPE** review". The map is
+keyed to what the PDF calls them and commented with what the page says.
+
+## The 455 is not supported
+
+It is an XFA/LiveCycle form, which cannot be filled reliably outside Adobe, and
+the copy supplied is watermarked DRAFT (`DHA FORM 455 (TEST), OCT 2025`).
