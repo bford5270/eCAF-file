@@ -13,6 +13,7 @@ to. A human operator imports everything through the browser or `pac`.
 
 | If you want to… | Read |
 |---|---|
+| **Fill DHA forms from a spreadsheet (start here — works today)** | **`docs/QUICKSTART-filler.md`** |
 | Deploy it | `RUNBOOK.md` |
 | Understand what was built and why | `PLAN.md` |
 | Provision the SharePoint lists | `dist/lists/provisioning-runbook.md` |

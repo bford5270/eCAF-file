@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 """Fill the real DHA FPPE and OPPE PDFs from structured input.
 
-  python3 tools/fill_dha_forms.py --list-fields forms/DHA_OPPE_Template.pdf
-  python3 tools/fill_dha_forms.py --fill inputs.json --form OPPE \
-        --template forms/DHA_OPPE_Template.pdf --out dist/filled/
+  # 1. get a spreadsheet to fill in
+  python3 tools/fill_dha_forms.py --blank-inputs my-oppe.csv --form OPPE
+  # 2. fill my-oppe.csv in Excel, one row per provider, then:
+  python3 tools/fill_dha_forms.py --fill my-oppe.csv --form OPPE \
+        --template DHA_OPPE_Template.pdf --out filled/
+
+  python3 tools/fill_dha_forms.py --list-fields DHA_OPPE_Template.pdf
 
 This is the "put in inputs, get my form back" path. It writes into the ACTUAL
 DHA PDF — the same file the MSP office already uses — not a lookalike. No
@@ -141,6 +145,48 @@ def cmd_list_fields(path):
     return 0
 
 
+def load_records(path):
+    """Accept .csv or .json. CSV is the normal case — one row per provider,
+    openable in Excel, which is where this data already lives. Blank cells are
+    dropped rather than written as empty strings, so a half-filled row fills the
+    fields it has and leaves the rest alone."""
+    if path.lower().endswith(".csv"):
+        import csv as _csv
+        with open(path, newline="", encoding="utf-8-sig") as fh:
+            return [{k: v for k, v in row.items() if k and str(v).strip()}
+                    for row in _csv.DictReader(fh)]
+    with open(path, encoding="utf-8") as fh:
+        data = json.load(fh)
+    return data if isinstance(data, list) else [data]
+
+
+def cmd_blank_inputs(form, out):
+    """Write a starter CSV: header = every key this tool accepts, plus one
+    example row. Fill it in Excel, delete the example row, run --fill."""
+    import csv as _csv
+    fmap = resolve_map(form)
+    keys = list(fmap)
+    example = {
+        "provider_name": "PROVIDER, SAMPLE A.",
+        "department": "SAMPLE Medical Battalion",
+    }
+    os.makedirs(os.path.dirname(os.path.abspath(out)) or ".", exist_ok=True)
+    with open(out, "w", newline="", encoding="utf-8-sig") as fh:
+        w = _csv.DictWriter(fh, fieldnames=keys)
+        w.writeheader()
+        w.writerow({k: example.get(k, "") for k in keys})
+    print(f"Wrote {out} — {len(keys)} columns, one example row.\n")
+    print("Next:")
+    print("  1. Open it in Excel. One row per provider.")
+    print("  2. Replace the example row with real values. Leave blanks blank.")
+    print(f"  3. python3 tools/fill_dha_forms.py --fill {out} --form {form.upper()} \\")
+    print("         --template <the DHA PDF> --out filled/")
+    print("\nColumns map to the form as follows:")
+    for k, v in fmap.items():
+        print(f"  {k:<30} -> {v[:64]}")
+    return 0
+
+
 def resolve_map(form):
     return {"FPPE": FPPE_MAP, "OPPE": OPPE_MAP}[form.upper()]
 
@@ -149,9 +195,7 @@ def cmd_fill(inputs_path, form, template, outdir):
     from pypdf import PdfReader, PdfWriter
     from pypdf.generic import NameObject, BooleanObject
 
-    with open(inputs_path, encoding="utf-8") as fh:
-        data = json.load(fh)
-    records = data if isinstance(data, list) else [data]
+    records = load_records(inputs_path)
 
     fmap = resolve_map(form)
     reader = PdfReader(template)
@@ -246,6 +290,8 @@ def cmd_fill(inputs_path, form, template, outdir):
 def main():
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--blank-inputs", metavar="OUT_CSV",
+                    help="write a starter CSV you fill in Excel (needs --form)")
     ap.add_argument("--list-fields", metavar="PDF")
     ap.add_argument("--fill", metavar="INPUTS_JSON")
     ap.add_argument("--form", choices=["FPPE", "OPPE", "fppe", "oppe"])
@@ -253,6 +299,10 @@ def main():
     ap.add_argument("--out", default="dist/filled")
     a = ap.parse_args()
 
+    if a.blank_inputs:
+        if not a.form:
+            ap.error("--blank-inputs needs --form FPPE or --form OPPE")
+        return cmd_blank_inputs(a.form, a.blank_inputs)
     if a.list_fields:
         return cmd_list_fields(a.list_fields)
     if a.fill:
